@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Highlight Reel Lab</title>
+<link rel="stylesheet" href="lib.css">
+<style>
+  main { max-width: 1040px; margin: 0 auto; padding: 40px 16px 64px; }
+  h1 { font-size: 30px; letter-spacing: -0.03em; margin: 0 0 6px; }
+  h1 span { color: var(--accent); }
+  .lede { color: var(--muted); max-width: 640px; margin: 0 0 8px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 30px; }
+  .facts span { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; color: var(--muted); }
+  .facts b { color: var(--fg); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .card { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 18px; text-decoration: none; transition: border-color .15s, transform .15s; }
+  .card:hover { border-color: #555; transform: translateY(-2px); }
+  .card.missing { opacity: .45; pointer-events: none; }
+  .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .card h2 { margin: 0; font-size: 19px; letter-spacing: -0.02em; }
+  .kind { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); white-space: nowrap; }
+  .bet { margin: 8px 0 14px; color: var(--muted); font-size: 14px; }
+  dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; font-size: 13px; }
+  dt { color: var(--dim); }
+  dd { margin: 0; color: var(--muted); }
+  .bars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .bars div { font-size: 11px; color: var(--dim); }
+  .bars i { display: block; height: 4px; border-radius: 2px; background: #262626; margin-top: 5px; position: relative; overflow: hidden; }
+  .bars i::after { content: ""; position: absolute; inset: 0; width: calc(var(--v) * 20%); background: var(--fg); border-radius: 2px; }
+  .open { margin-top: 16px; font-weight: 700; font-size: 14px; }
+  .state { font-size: 11px; color: var(--dim); margin-top: 6px; }
+  h3 { margin: 40px 0 10px; font-size: 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 500; font-size: 12px; }
+  td { color: var(--muted); }
+  td:first-child { color: var(--fg); font-weight: 600; white-space: nowrap; }
+  .note { color: var(--dim); font-size: 12.5px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Highlight Reel <span>Lab</span></h1>
+  <p class="lede">Six ways the same feed could become a product. Each one is a working page on today's live clips.</p>
+  <div class="facts" id="facts"></div>
+
+  <div class="grid" id="grid"></div>
+
+  <h3>How they compare</h3>
+  <table>
+    <tr><th>Direction</th><th>Why someone comes back</th><th>What it needs to work</th><th>Biggest risk</th></tr>
+    <tr><td>Reel (baseline)</td><td>Habit. It is the format people already know.</td><td>Enough fresh action clips every hour.</td><td>It is a worse TikTok unless the clips are ones TikTok does not show.</td></tr>
+    <tr><td>Where in the World</td><td>One daily round, a score to beat and a result to share.</td><td>Clips that look different by country. Five good ones a day is enough.</td><td>Kits and pitch-side adverts can give the answer away, or give nothing.</td></tr>
+    <tr><td>Versus</td><td>Voting is quick and the leaderboard changes while you play.</td><td>Mostly goals. Two weak clips make a dull choice.</td><td>Needs many voters before the ranking means anything.</td></tr>
+    <tr><td>Atlas</td><td>Curiosity. The map shows football you would never search for.</td><td>Even coverage. Empty countries make the map look broken.</td><td>Fun on the first visit. Less reason to return on the tenth.</td></tr>
+    <tr><td>My Feed</td><td>It shows your club and your players first.</td><td>Accurate tags. Player tags cover about 14% of clips today.</td><td>A fan of a small club follows it and gets three clips.</td></tr>
+    <tr><td>Football TV</td><td>No effort. It plays while you do something else.</td><td>Sound, and clips long enough to feel like a broadcast.</td><td>Shorts are vertical. A TV is not.</td></tr>
+    <tr><td>Matchday</td><td>It answers "what happened in my league this weekend".</td><td>Grouping that is right. Needs real fixtures to group by match.</td><td>Only as good as the tagging. Most leagues have under ten clips.</td></tr>
+  </table>
+  <p class="note">The bars on each card are my estimates, scored 1 to 5. They are not measured.</p>
+</main>
+
+<script src="lib.js"></script>
+<script>
+const DIRECTIONS = [
+  { file: 'reel.html', name: 'Reel', kind: 'Baseline', bet: 'The vertical feed you already have, with context pills.',
+    win: 'Familiar. Nothing to learn.', risk: 'Hard to tell apart from every other shorts feed.', v: [3, 2, 5] },
+  { file: 'guess.html', name: 'Where in the World', kind: 'Daily game', bet: 'A clip plays with no labels. You guess the country.',
+    win: 'Five clips a day. A score people share.', risk: 'Some clips give the answer away.', v: [5, 5, 4] },
+  { file: 'versus.html', name: 'Versus', kind: 'Voting game', bet: 'Two clips. Pick the better one. A world ranking builds.',
+    win: 'Every vote makes the ranking better.', risk: 'Needs volume before the ranking is worth reading.', v: [4, 4, 4] },
+  { file: 'atlas.html', name: 'Atlas', kind: 'Discovery', bet: 'A world map. Tap a country and watch its football.',
+    win: 'Makes the 65-country spread the whole point.', risk: 'A novelty unless something changes daily.', v: [3, 5, 4] },
+  { file: 'follow.html', name: 'My Feed', kind: 'Personal', bet: 'Follow teams, players and leagues. The feed re-ranks.',
+    win: 'The strongest reason to open it twice.', risk: 'Small clubs have too few clips.', v: [5, 2, 3] },
+  { file: 'tv.html', name: 'Football TV', kind: 'Lean-back', bet: 'Channels by region. It plays without you touching it.',
+    win: 'Zero effort. Suits a second screen.', risk: 'Vertical clips on a wide screen.', v: [3, 3, 5] },
+  { file: 'matchday.html', name: 'Matchday', kind: 'Stories', bet: 'Clips grouped into stories by league, team and player.',
+    win: 'Catch up on one competition in a minute.', risk: 'Depends on tagging and on clip volume per league.', v: [4, 3, 3] },
+];
+const LABELS = ['Return visits', 'Different', 'Ready today'];
+
+document.getElementById('grid').innerHTML = DIRECTIONS.map((d, i) => `
+  <a class="card" id="c${i}" href="${d.file}">
+    <div class="top"><h2>${Reel.esc(d.name)}</h2><span class="kind">${Reel.esc(d.kind)}</span></div>
+    <p class="bet">${Reel.esc(d.bet)}</p>
+    <dl><dt>Why</dt><dd>${Reel.esc(d.win)}</dd><dt>Risk</dt><dd>${Reel.esc(d.risk)}</dd></dl>
+    <div class="bars">${d.v.map((v, j) => `<div>${LABELS[j]}<i style="--v:${v}"></i></div>`).join('')}</div>
+    <div class="open">Open →</div><div class="state" id="s${i}"></div>
+  </a>`).join('');
+
+// Grey out any direction whose page isn't built yet
+DIRECTIONS.forEach((d, i) => fetch(d.file, { method: 'HEAD' }).then(r => {
+  if (!r.ok) { document.getElementById('c' + i).classList.add('missing'); document.getElementById('s' + i).textContent = 'Still being built.'; }
+}).catch(() => {}));
+
+Reel.load({ actionOnly: false }).then(all => {
+  const act = all.filter(v => v.action);
+  const countries = new Set(all.map(v => v.country)).size;
+  const day = act.filter(v => Date.now() - new Date(v.published) < 864e5).length;
+  document.getElementById('facts').innerHTML = [
+    [all.length.toLocaleString(), 'Shorts in the feed'], [act.length, 'are match action'], [day, 'action clips from the last 24 hours'],
+    [countries, 'countries and regions'], [act.filter(v => v.ctx.teams.length).length, 'action clips tagged with a team'],
+  ].map(([n, t]) => `<span><b>${n}</b> ${t}</span>`).join('');
+});
+</script>
+</body>
+</html>

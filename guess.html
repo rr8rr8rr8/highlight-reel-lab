@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Where in the World</title>
+<link rel="stylesheet" href="lib.css">
+<style>
+  body { display: flex; justify-content: center; }
+  .wrap { width: 100%; max-width: 880px; padding: 52px 16px 24px; display: grid; gap: 20px;
+    grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+  body.nostage .wrap { grid-template-columns: minmax(0, 1fr); max-width: 520px; }
+  body.nostage .stage { display: none; }
+  .stage { height: min(76vh, 640px); }
+  .stage .mount { position: absolute; left: 0; width: 100%; top: -12%; height: 124%; }
+  .stage .veil { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center;
+    background: #111; color: var(--dim); font-size: 13px; transition: opacity .2s; text-align: center; padding: 16px; }
+  .stage .veil.off { opacity: 0; pointer-events: none; }
+  .stage .veil.num { font-size: 72px; font-weight: 800; color: var(--fg); font-variant-numeric: tabular-nums; }
+  .poster { position: absolute; inset: 0; z-index: 3; overflow: hidden; background: #111; display: none; align-items: center; justify-content: center; }
+  body.v-start .poster { display: flex; }
+  .poster i { position: absolute; inset: -12%; background: center / cover no-repeat; filter: blur(22px) brightness(.6); }
+  .poster b { position: relative; font-size: 96px; font-weight: 800; opacity: .9; }
+  .cap { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; padding: 44px 14px 14px;
+    background: linear-gradient(transparent, rgba(0,0,0,.93) 34%); }
+  .cap .v { font-weight: 800; font-size: 17px; } .cap .v.g { color: var(--good); } .cap .v.y { color: #f5c542; } .cap .v.r { color: #ff6b66; }
+  .cap .d { font-size: 14px; margin-top: 3px; display: flex; align-items: center; gap: 8px; }
+  .cap .arrow { display: inline-flex; width: 24px; height: 24px; border-radius: 50%; background: var(--chip); align-items: center;
+    justify-content: center; font-weight: 800; flex: none; }
+  .cap .t { font-size: 13px; margin-top: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .cap .m { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  h1 { font-size: 26px; margin: 0; letter-spacing: -.02em; }
+  h2 { font-size: 13px; margin: 0; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0; }
+  .top { display: flex; align-items: center; gap: 10px; }
+  .top .name { font-weight: 700; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .icon { background: var(--chip); border-radius: 999px; width: 34px; height: 34px; font-size: 15px; flex: none; }
+  .dots { display: flex; gap: 5px; }
+  .dots i { flex: 1; max-width: 40px; height: 6px; border-radius: 3px; background: var(--chip); }
+  .dots i.g { background: var(--good); } .dots i.y { background: #f5c542; } .dots i.r { background: var(--accent); } .dots i.cur { background: var(--fg); }
+  .pts { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .bar { height: 8px; border-radius: 4px; background: var(--chip); overflow: hidden; }
+  .bar b { display: block; height: 100%; width: 100%; background: var(--fg); transform-origin: left; }
+  .barrow { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+  .barrow .bar { flex: 1; } .barrow span { width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+  .q { font-size: 14px; font-weight: 600; }
+  .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .opt { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 12px; text-align: left;
+    display: flex; align-items: center; gap: 10px; font-weight: 600; min-height: 60px; position: relative; }
+  .opt .f { font-size: 26px; line-height: 1; }
+  .opt .k { position: absolute; top: 5px; right: 8px; font-size: 10px; color: var(--dim); font-weight: 500; }
+  .opt:not(:disabled):hover { border-color: var(--fg); }
+  .opt:not(:disabled):active { transform: scale(.98); }
+  .opt:disabled { cursor: default; opacity: .45; }
+  .opt.right { opacity: 1; border-color: var(--good); background: rgba(43,213,118,.16); }
+  .opt.wrong { opacity: 1; border-color: var(--accent); background: rgba(229,50,45,.16); }
+  .opt.near { opacity: 1; border-color: #f5c542; background: rgba(245,197,66,.14); }
+  .actions { min-height: 44px; display: flex; gap: 8px; }
+  .actions .btn { flex: 1; padding: 12px 18px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .ghost { background: var(--chip); border-radius: 999px; padding: 10px 18px; font-weight: 600; }
+  .btn.wide { padding: 14px 22px; font-size: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .card.quiet { background: none; }
+  .big { font-size: 44px; font-weight: 800; letter-spacing: -.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .squares { font-size: 28px; letter-spacing: 3px; line-height: 1; }
+  .mini { display: flex; gap: 3px; } .mini i { width: 14px; height: 14px; border-radius: 3px; background: var(--chip); }
+  .mini i.g { background: var(--good); } .mini i.y { background: #f5c542; } .mini i.r { background: var(--accent); }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .tiles div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+  .tiles b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; } .tiles span { font-size: 11px; color: var(--muted); }
+  .answers { display: grid; gap: 6px; }
+  .ans { display: flex; align-items: center; gap: 10px; font-size: 13px; text-decoration: none; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px; padding: 6px 10px 6px 6px; }
+  .ans img { width: 54px; height: 40px; object-fit: cover; border-radius: 8px; flex: none; background: #111; }
+  .ans .w { flex: 1; min-width: 0; } .ans .w b { display: block; } .ans .w span { color: var(--muted); font-size: 12px; display: block;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ans .p { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .ans .sq { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+  .ans .sq.g { background: var(--good); } .ans .sq.y { background: #f5c542; } .ans .sq.r { background: var(--accent); }
+  .days { display: grid; gap: 4px; }
+  .day { display: flex; align-items: center; gap: 10px; background: none; border-radius: 10px; padding: 8px 6px; text-align: left; font-size: 13px;
+    border-bottom: 1px solid var(--line); border-radius: 0; }
+  .day:hover { background: var(--panel); }
+  .day .n { font-weight: 700; width: 38px; } .day .dt { color: var(--muted); flex: 1; } .day .go { color: var(--muted); }
+  .dist { display: grid; gap: 5px; }
+  .dist div { display: flex; align-items: center; gap: 8px; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .dist span { width: 10px; color: var(--muted); } .dist i { height: 18px; background: var(--chip); border-radius: 4px; min-width: 4px; }
+  .dist i.hi { background: var(--good); } .dist em { font-style: normal; color: var(--muted); }
+  .week { display: grid; gap: 6px; }
+  .week div { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .week span { width: 64px; } .week em { font-style: normal; margin-left: auto; }
+  [hidden] { display: none !important; }
+  @media (hover: none) { .opt .k { display: none; } }
+  @media (max-width: 640px) {
+    .wrap, body.nostage .wrap { display: flex; flex-direction: column; align-items: center; padding: 48px 12px 14px; gap: 10px; min-height: 100dvh; }
+    body.v-play .stage { height: calc(100dvh - 340px); min-height: 220px; }
+    body.v-start .stage { height: 26vh; }
+    .poster b { font-size: 56px; }
+    .side { width: 100%; gap: 9px; }
+    body.v-play #play { margin-top: auto; }
+    h1 { font-size: 22px; }
+    .q { display: none; }
+    .opt { min-height: 62px; font-size: 15px; } .opt .f { font-size: 24px; }
+    .actions { min-height: 48px; } .actions .btn { padding: 14px 18px; }
+    .btn.wide { width: 100%; }
+    .cap { padding: 36px 12px 10px; } .cap .t { -webkit-line-clamp: 1; }
+    .tiles { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body class="v-start">
+<a class="back" href="index.html">← Lab</a>
+<div class="wrap">
+  <div class="frame stage" id="stage">
+    <div class="mount" id="mount"></div>
+    <div class="veil" id="veil">Loading</div>
+    <div class="poster" id="poster"><i id="posterImg"></i><b>?</b></div>
+    <div class="cap" id="cap" hidden></div>
+  </div>
+
+  <!-- start -->
+  <div class="side" id="start">
+    <h1>Where in the World</h1>
+    <p class="sub">A football clip plays with no labels. Pick the country it comes from.</p>
+    <div class="card" id="dailyCard"><p class="sub">Loading today's five.</p></div>
+    <div class="row" id="quick"></div>
+    <div class="card quiet">
+      <h2>Practice</h2>
+      <p class="sub">Random clips. Practice rounds do not count for the streak.</p>
+      <div class="row" id="regions"></div>
+      <div class="row"><button class="ghost" id="random">Play a random round</button></div>
+    </div>
+    <div id="archiveBox" hidden>
+      <h2 style="margin-bottom:6px">Previous days</h2>
+      <div class="days" id="archive"></div>
+    </div>
+  </div>
+
+  <!-- play -->
+  <div class="side" id="play" hidden>
+    <div class="top">
+      <div class="name" id="roundName"></div>
+      <div class="pts" id="pts">0</div>
+      <button class="icon" id="sound" title="Sound" aria-label="Sound"></button>
+      <button class="icon" id="quit" title="Leave the round" aria-label="Leave the round">✕</button>
+    </div>
+    <div class="dots" id="dots"></div>
+    <div class="barrow"><div class="bar"><b id="bar"></b></div><span id="bonus">+100</span></div>
+    <div class="q" id="q">Which country?</div>
+    <div class="opts" id="opts"></div>
+    <div class="actions"><button class="btn" id="next" hidden>Next</button></div>
+  </div>
+
+  <!-- end -->
+  <div class="side" id="end" hidden>
+    <h2 id="endTitle"></h2>
+    <div class="big" id="endScore"></div>
+    <p class="sub" id="endLine"></p>
+    <div class="squares" id="squares"></div>
+    <div class="row">
+      <button class="btn" id="copy">Copy result</button>
+      <button class="ghost" id="again" hidden>Play another</button>
+      <button class="ghost" id="toStats">Stats</button>
+      <button class="ghost" id="home">Home</button>
+    </div>
+    <p class="sub" id="endNote"></p>
+    <div class="answers" id="answers"></div>
+  </div>
+
+  <!-- stats -->
+  <div class="side" id="stats" hidden>
+    <h1>Stats</h1>
+    <div class="tiles" id="tiles"></div>
+    <h2>Correct per game</h2>
+    <div class="dist" id="dist"></div>
+    <h2>Last 7 days</h2>
+    <div class="week" id="week"></div>
+    <div class="row"><button class="ghost" id="statsBack">Back</button></div>
+  </div>
+</div>
+
+<script src="lib.js"></script>
+<script>
+(async function () {
+  const $ = id => document.getElementById(id);
+  const ROUND = 5, DRAIN_MS = 12000, BASE = 100, BONUS = 100, CLOSE_KM = 1500, CLOSE_PTS = 50, LEAGUE_PTS = 50;
+  const KEY = 'reel.guess.v2', EPOCH = '2026-11-23';
+  const SQ = { g: '🟩', y: '🟨', r: '🟥' };
+  const esc = Reel.esc;
+
+  // ---- storage: { sound, region, days: { 'YYYY-MM-DD': { number, points, results, done, live, local } } } ----
+  function readStore() { try { const s = JSON.parse(localStorage.getItem(KEY)) || {}; s.days = s.days || {}; return s; } catch (e) { return { days: {} }; } }
+  function writeStore(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {} }
+  function patchStore(fn) { const s = readStore(); fn(s); writeStore(s); return s; }
+
+  // ---- dates ----
+  function dayKey(d) { d = d || new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function parseDay(k) { const p = k.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); }
+  function addDays(k, n) { const d = parseDay(k); d.setDate(d.getDate() + n); return dayKey(d); }
+  function dayNumber(k) { return Math.round((parseDay(k) - parseDay(EPOCH)) / 864e5) + 1; }
+  function niceDay(k) { return parseDay(k).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }); }
+  function untilMidnight() {
+    const n = new Date(), m = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1);
+    let s = Math.max(0, Math.floor((m - n) / 1000));
+    const h = Math.floor(s / 3600); s -= h * 3600; const mi = Math.floor(s / 60); s -= mi * 60;
+    return [h, mi, s].map(x => String(x).padStart(2, '0')).join(':');
+  }
+
+  // ---- seeded random ----
+  function hash(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+  function mulberry(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function shuffle(arr, rng) { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+  // ---- geography ----
+  const rad = x => x * Math.PI / 180;
+  function geoBetween(from, to) { // km and compass bearing from one catalog country to another
+    const a = Reel.GEO[from], b = Reel.GEO[to];
+    if (!a || !b) return null;
+    const p1 = rad(a[0]), p2 = rad(b[0]), dl = rad(b[1] - a[1]);
+    const h = Math.sin((p2 - p1) / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+    const km = 2 * 6371 * Math.asin(Math.sqrt(h));
+    const y = Math.sin(dl) * Math.cos(p2), x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+    return { km: Math.round(km), bearing: (Math.atan2(y, x) * 180 / Math.PI + 360) % 360 };
+  }
+  const COMPASS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+  const compass = deg => COMPASS[Math.round(deg / 45) % 8];
+  const fmtKm = km => km.toLocaleString('en-GB') + ' km';
+
+  // ---- feed data (used for practice, spares, the local fallback and league options) ----
+  const REGIONS = { Europe: ['Europe', 'UK & Ireland'], Americas: ['N & C America', 'South America'], Africa: ['Africa'], Asia: ['Asia & Oceania', 'Middle East'] };
+  const regionOfGroup = {}; Object.keys(REGIONS).forEach(r => REGIONS[r].forEach(g => regionOfGroup[g] = r));
+  let all = [];
+  try { all = await Reel.load({ actionOnly: false }); } catch (e) { all = []; }
+  const countryRegion = {};
+  all.forEach(v => { const r = regionOfGroup[v.group]; if (r && Reel.GEO[v.country] && !countryRegion[v.country]) countryRegion[v.country] = r; });
+  let pool = all.filter(v => v.action && v.id && Reel.GEO[v.country]);
+  if (new Set(pool.map(v => v.country)).size < 8) pool = all.filter(v => v.id && Reel.GEO[v.country]);
+  pool.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0); // stable order, so the seed decides
+  const byCountry = {};
+  pool.forEach(v => (byCountry[v.country] = byCountry[v.country] || []).push(v));
+  const optionCountries = Object.keys(Reel.GEO).filter(c => countryRegion[c] || byCountry[c]).sort();
+  const regionOf = c => countryRegion[c] || '';
+
+  // Leagues: where each one is mostly seen, so wrong options come from the same country or region
+  const normLeague = s => { const k = String(s).toLowerCase().replace(/[^a-z0-9]/g, ''); return k === 'majorleaguesoccer' ? 'mls' : k; };
+  const leagues = {};
+  all.forEach(v => {
+    const lg = v.ctx && v.ctx.league, r = regionOfGroup[v.group];
+    if (!lg || !r || /vole?i|volley|basket/i.test(lg)) return;
+    const L = leagues[normLeague(lg)] = leagues[normLeague(lg)] || { names: {}, regions: {}, countries: {}, n: 0 };
+    L.n++; L.names[lg] = (L.names[lg] || 0) + 1; L.regions[r] = (L.regions[r] || 0) + 1; L.countries[v.country] = (L.countries[v.country] || 0) + 1;
+  });
+  const top = o => Object.keys(o).sort((a, b) => o[b] - o[a])[0];
+  Object.keys(leagues).forEach(k => { const L = leagues[k]; L.key = k; L.name = top(L.names); L.region = top(L.regions); L.country = top(L.countries); });
+
+  function leagueQuestion(entry) {
+    const lg = entry.item.league;
+    if (!lg) return null;
+    const key = normLeague(lg), region = regionOf(entry.item.country) || regionOfGroup[entry.item.group];
+    if (!region) return null;
+    const rng = mulberry(hash('lg-' + entry.item.id));
+    const others = Object.values(leagues).filter(L => L.key !== key && L.n >= 2 && L.region === region);
+    const same = shuffle(others.filter(L => L.country === entry.item.country), rng);
+    const rest = shuffle(others.filter(L => L.country !== entry.item.country), rng);
+    const wrong = same.concat(rest).slice(0, 3).map(L => L.name);
+    if (wrong.length < 3) return null;
+    return { answer: lg, options: shuffle([lg].concat(wrong), rng) };
+  }
+
+  const slim = v => ({ id: v.id, title: v.title, channel: v.channel, country: v.country, group: v.group, league: (v.ctx && v.ctx.league) || '' });
+  // One clip per country where possible, in seeded order. Used for practice, the local fallback and spares.
+  function buildQueue(rng, region, skip, want) {
+    skip = skip || {};
+    let cs = Object.keys(byCountry).sort().filter(c => !skip[c] && (!region || regionOf(c) === region));
+    if (!cs.length) return [];
+    const used = {}, out = [];
+    let order = shuffle(cs, rng), guard = 0;
+    while (out.length < (want || 12) && guard++ < 60) {
+      if (!order.length) order = shuffle(cs, rng);
+      const c = order.shift(), list = byCountry[c].filter(v => !used[v.id]);
+      if (!list.length) continue;
+      const item = list[Math.floor(rng() * list.length)]; used[item.id] = 1;
+      const same = shuffle(optionCountries.filter(x => x !== c && regionOf(x) === regionOf(c)), rng);
+      const rest = shuffle(optionCountries.filter(x => x !== c && regionOf(x) !== regionOf(c)), rng);
+      out.push({ item: slim(item), options: shuffle([c].concat(same.concat(rest).slice(0, 3)), rng) });
+    }
+    return out;
+  }
+
+  // ---- the daily five ----
+  const dailyCache = {};
+  function spares(date, five) {
+    const skip = {}; five.forEach(e => skip[e.item.country] = 1);
+    return buildQueue(mulberry(hash('spare-' + date)), '', skip, 6);
+  }
+  function localDaily(date) {
+    const q = buildQueue(mulberry(hash('witw-' + date)), '', null, ROUND + 6);
+    if (q.length < ROUND) return null;
+    return { date, number: dayNumber(date), local: true, queue: q };
+  }
+  function loadDaily(date, allowLocal) {
+    if (dailyCache[date]) return dailyCache[date];
+    const p = (async () => {
+      try {
+        const r = await fetch('daily.json?date=' + date);
+        if (!r.ok) throw new Error('daily ' + r.status);
+        const d = await r.json();
+        const clips = (d.clips || []).filter(c => c && c.id && c.country && Array.isArray(c.options) && c.options.indexOf(c.country) >= 0);
+        if (clips.length < ROUND) throw new Error('daily short');
+        const five = clips.slice(0, ROUND).map(c => ({
+          item: { id: c.id, title: c.title || '', channel: c.channel || '', country: c.country, group: c.group || '', league: c.league || '' },
+          options: c.options.slice() }));
+        return { date, number: d.number || dayNumber(date), local: false, queue: five.concat(spares(date, five)) };
+      } catch (e) { return allowLocal ? localDaily(date) : null; }
+    })();
+    dailyCache[date] = p;
+    p.then(v => { if (!v) delete dailyCache[date]; });
+    return p;
+  }
+  async function loadArchive() {
+    try { const r = await fetch('daily-archive.json'); if (!r.ok) throw 0; const a = await r.json();
+      return (Array.isArray(a) ? a : []).filter(d => /^\d{4}-\d\d-\d\d$/.test(d) && d < dayKey()).sort().reverse().slice(0, 14);
+    } catch (e) { return []; }
+  }
+
+  // ---- stats ----
+  function computeStats() {
+    const days = readStore().days, done = Object.keys(days).filter(k => days[k] && days[k].done).sort();
+    const isLive = k => days[k] && days[k].done && days[k].live;
+    let best = 0, run = 0, prev = null;
+    done.filter(isLive).forEach(k => { run = prev && addDays(prev, 1) === k ? run + 1 : 1; best = Math.max(best, run); prev = k; });
+    let cur = 0, k = dayKey();
+    if (!isLive(k)) k = addDays(k, -1);
+    while (isLive(k)) { cur++; k = addDays(k, -1); }
+    const dist = [0, 0, 0, 0, 0, 0]; let total = 0;
+    done.forEach(d => { dist[Math.min(5, days[d].results.filter(r => r.s === 'g').length)]++; total += days[d].points || 0; });
+    return { played: done.length, avg: done.length ? Math.round(total / done.length) : 0, cur, best, dist, days };
+  }
+  const miniSquares = results => { let h = ''; for (let i = 0; i < ROUND; i++) h += '<i class="' + (results && results[i] ? results[i].s : '') + '"></i>'; return '<span class="mini">' + h + '</span>'; };
+  const squaresOf = results => results.map(r => SQ[r.s] || SQ.r).join('');
+  const correctOf = results => results.filter(r => r.s === 'g').length;
+
+  // ---- views ----
+  let view = 'start', statsFrom = 'start';
+  function show(v) {
+    view = v;
+    ['start', 'play', 'end', 'stats'].forEach(id => $(id).hidden = id !== v);
+    document.body.className = 'v-' + v + (v === 'end' || v === 'stats' ? ' nostage' : '');
+    window.scrollTo(0, 0);
+  }
+
+  // ---- round state ----
+  let round = null, cur = null, yt = null, token = 0, raf = 0, clockStart = 0, answered = false, watchdog = 0, cdTimer = 0, phase = '', leagueQ = null;
+  let region = '', todayDaily = null, archiveDates = [];
+  try { region = readStore().region || ''; } catch (e) {}
+  const soundOn = () => readStore().sound !== false;
+
+  function killPlayer() {
+    token++;
+    cancelAnimationFrame(raf); clearTimeout(watchdog); clearTimeout(cdTimer);
+    if (yt) { try { yt.destroy(); } catch (e) {} yt = null; }
+    $('mount').innerHTML = '';
+  }
+  function veil(text, num) { const v = $('veil'); v.textContent = text; v.classList.toggle('num', !!num); v.classList.remove('off'); }
+  function applySound(p) { p = p || yt; if (!p) return; try { if (soundOn()) { p.unMute(); p.setVolume(100); } else p.mute(); } catch (e) {} }
+  function drawSound() { $('sound').textContent = soundOn() ? '🔊' : '🔇'; $('sound').title = soundOn() ? 'Sound is on' : 'Sound is off'; }
+
+  function startRound(mode, daily, resume) {
+    const s = readStore();
+    if (mode === 'practice') {
+      const q = buildQueue(mulberry((Math.random() * 2 ** 32) >>> 0), region, null, ROUND + 6);
+      if (q.length < 2) return;
+      round = { mode, name: 'Practice' + (region ? ' · ' + region : ''), queue: q, qi: 0, results: [], points: 0 };
+    } else {
+      round = { mode, date: daily.date, number: daily.number, local: daily.local, name: 'Daily #' + daily.number + (mode === 'archive' ? ' · ' + niceDay(daily.date) : ''),
+        queue: daily.queue.slice(), qi: 0, results: [], points: 0 };
+      const saved = s.days[daily.date];
+      if (resume && saved && !saved.done && saved.results && saved.results.length) {
+        round.results = saved.results.slice(); round.points = saved.points || 0; round.qi = round.results.length;
+      }
+    }
+    $('roundName').textContent = round.name;
+    drawSound(); show('play'); showClip();
+  }
+
+  function saveProgress(done) {
+    if (!round || round.mode === 'practice') return;
+    patchStore(s => {
+      const old = s.days[round.date];
+      if (old && old.done) return; // a finished day is never overwritten
+      s.days[round.date] = { number: round.number, points: round.points, results: round.results, done: !!done,
+        live: round.mode === 'daily' && round.date === dayKey(), local: !!round.local };
+    });
+  }
+
+  function drawTop() {
+    $('pts').textContent = round.points + ' pts';
+    let h = '';
+    for (let i = 0; i < ROUND; i++) { const r = round.results[i]; h += '<i class="' + (r ? r.s : (i === round.results.length ? 'cur' : '')) + '"></i>'; }
+    $('dots').innerHTML = h;
+  }
+  function bonusNow() { return clockStart ? Math.max(0, Math.round(BONUS * (1 - (performance.now() - clockStart) / DRAIN_MS))) : BONUS; }
+  function tick() {
+    const b = bonusNow();
+    $('bar').style.transform = 'scaleX(' + (b / BONUS) + ')'; $('bonus').textContent = '+' + b;
+    if (!answered && b > 0) raf = requestAnimationFrame(tick);
+  }
+  function startClock() {
+    if (clockStart || answered || phase !== 'go') return;
+    clockStart = performance.now();
+    $('veil').classList.add('off');
+    $('opts').querySelectorAll('button').forEach(b => b.disabled = false);
+    tick();
+  }
+  function optButtons(list, withFlag) {
+    return list.map((c, i) => '<button class="opt" disabled data-c="' + esc(c) + '">' + (withFlag ? '<span class="f">' + Reel.flag(c) + '</span>' : '') +
+      '<span>' + esc(c) + '</span><span class="k">' + (i + 1) + '</span></button>').join('');
+  }
+
+  function showClip() {
+    killPlayer();
+    if (round.results.length >= ROUND || round.qi >= round.queue.length) { finish(); return; }
+    cur = round.queue[round.qi];
+    answered = false; clockStart = 0; phase = 'loading'; leagueQ = null;
+    drawTop(); veil('Loading clip');
+    $('bar').style.transform = 'scaleX(1)'; $('bonus').textContent = '+' + BONUS;
+    $('cap').hidden = true; $('next').hidden = true; $('q').textContent = 'Which country?';
+    $('opts').innerHTML = optButtons(cur.options, true);
+    const my = token;
+    const fail = () => { // a clip that will not play is swapped for a spare and not counted
+      if (my !== token || answered || clockStart) return;
+      round.queue.splice(round.qi, 1); showClip();
+    };
+    Reel.player($('mount'), cur.item.id, {
+      loop: true, muted: true,
+      onPlaying: p => {
+        if (my !== token) return;
+        clearTimeout(watchdog);
+        if (phase === 'loading') { phase = 'count'; try { p.pauseVideo(); p.seekTo(0, true); } catch (e) {} countdown(my, p); }
+        else if (phase === 'go') startClock();
+      },
+      onError: fail,
+    }).then(p => { if (my !== token) { try { p.destroy(); } catch (e) {} } else yt = p; });
+    watchdog = setTimeout(() => { if (my === token && phase === 'loading') fail(); }, 12000);
+  }
+  // 3-2-1 with the clip held at its first frame, so the timer starts when the picture does
+  function countdown(my, p) {
+    let n = 3;
+    const step = () => {
+      if (my !== token) return;
+      if (n === 0) {
+        phase = 'go'; applySound(p);
+        try { p.playVideo(); } catch (e) {}
+        cdTimer = setTimeout(() => { // sound can be refused by the browser: fall back to muted and start anyway
+          if (my !== token) return;
+          try { if (p.getPlayerState() !== 1) { p.mute(); p.playVideo(); } } catch (e) {}
+          startClock();
+        }, 1200);
+        return;
+      }
+      veil(String(n), true); n--; cdTimer = setTimeout(step, 600);
+    };
+    step();
+  }
+
+  function caption(r, full) {
+    const it = cur.item; let h = '';
+    if (r.s === 'g') h += '<div class="v g">Correct. +' + r.base + ' points.</div>';
+    else {
+      h += '<div class="v ' + r.s + '">' + (r.s === 'y' ? 'Close. +' + r.gained + ' points. ' : 'Wrong. ') + 'It is ' + esc(it.country) + ' ' + Reel.flag(it.country) + '.</div>';
+      if (r.km != null) h += '<div class="d"><span class="arrow" style="transform:rotate(' + Math.round(r.bearing) + 'deg)">↑</span>' +
+        '<span>' + esc(r.guess) + ' is ' + fmtKm(r.km) + ' away. Head ' + compass(r.bearing) + '.</span></div>';
+    }
+    if (r.lg === 'ok') h += '<div class="d">League correct. +' + LEAGUE_PTS + ' points.</div>';
+    else if (r.lg === 'no') h += '<div class="d">The league is ' + esc(it.league) + '.</div>';
+    if (full) h += '<div class="t">' + esc(it.title) + '</div><div class="m">' + esc(it.channel) + (it.league ? ' · ' + esc(it.league) : '') + '</div>';
+    $('cap').innerHTML = h; $('cap').hidden = false;
+  }
+  function readyNext() {
+    phase = 'done';
+    $('next').textContent = round.results.length >= ROUND ? 'See result' : 'Next clip';
+    $('next').hidden = false;
+    saveProgress(false); drawTop();
+  }
+
+  function guess(country) {
+    if (answered || !clockStart || phase !== 'go') return;
+    answered = true; cancelAnimationFrame(raf);
+    const ans = cur.item.country, ok = country === ans, geo = ok ? null : geoBetween(country, ans);
+    const close = !ok && geo && geo.km <= CLOSE_KM;
+    const gained = ok ? BASE + bonusNow() : close ? CLOSE_PTS : 0;
+    const r = { s: ok ? 'g' : close ? 'y' : 'r', country: ans, guess: country, gained, base: gained, id: cur.item.id, title: cur.item.title };
+    if (geo) { r.km = geo.km; r.bearing = Math.round(geo.bearing); }
+    round.points += gained; round.results.push(r);
+    $('opts').querySelectorAll('button').forEach(b => {
+      b.disabled = true;
+      if (b.dataset.c === ans) b.classList.add('right');
+      else if (b.dataset.c === country) b.classList.add(close ? 'near' : 'wrong');
+    });
+    leagueQ = ok ? leagueQuestion(cur) : null;
+    if (leagueQ) {
+      caption(r, false); drawTop(); saveProgress(false);
+      phase = 'hold';
+      cdTimer = setTimeout(askLeague, 700);
+    } else { caption(r, true); readyNext(); }
+  }
+  function askLeague() {
+    if (phase !== 'hold') return;
+    phase = 'league';
+    $('q').textContent = 'Bonus. Which league?';
+    $('opts').innerHTML = optButtons(leagueQ.options, false);
+    $('opts').querySelectorAll('button').forEach(b => b.disabled = false);
+    $('bonus').textContent = '+' + LEAGUE_PTS; $('bar').style.transform = 'scaleX(1)';
+    $('next').textContent = 'Skip bonus'; $('next').hidden = false;
+  }
+  function guessLeague(name) {
+    if (phase !== 'league') return;
+    const r = round.results[round.results.length - 1];
+    if (name == null) r.lg = 'skip';
+    else {
+      r.lg = name === leagueQ.answer ? 'ok' : 'no';
+      if (r.lg === 'ok') { r.gained += LEAGUE_PTS; round.points += LEAGUE_PTS; }
+      $('opts').querySelectorAll('button').forEach(b => {
+        if (b.dataset.c === leagueQ.answer) b.classList.add('right'); else if (b.dataset.c === name) b.classList.add('wrong');
+      });
+    }
+    $('opts').querySelectorAll('button').forEach(b => b.disabled = true);
+    caption(r, true); readyNext();
+  }
+  function onNext() {
+    if (phase === 'hold') { clearTimeout(cdTimer); phase = 'league'; guessLeague(null); return; }
+    if (phase === 'league') { guessLeague(null); return; }
+    if (phase !== 'done') return;
+    if (round.results.length >= ROUND) finish(); else { round.qi++; showClip(); }
+  }
+
+  function finish() {
+    killPlayer();
+    const res = { mode: round.mode, date: round.date, number: round.number, points: round.points, results: round.results, name: round.name };
+    if (round.mode !== 'practice' && round.results.length) saveProgress(true);
+    showEnd(res);
+  }
+  function quit() { killPlayer(); round = null; renderStart(); show('start'); }
+
+  // ---- end screen ----
+  let shareText = '', endRes = null;
+  function shareOf(res) {
+    const head = res.mode === 'practice' ? 'Where in the World (practice)' : 'Where in the World #' + res.number;
+    return head + ' — ' + correctOf(res.results) + '/' + res.results.length + ' · ' + res.points + ' pts\n' + squaresOf(res.results) + '\n' + location.origin + location.pathname;
+  }
+  function showEnd(res) {
+    endRes = res; show('end');
+    const n = res.results.length, correct = correctOf(res.results), close = res.results.filter(r => r.s === 'y').length;
+    $('endTitle').textContent = res.mode === 'practice' ? res.name : 'Daily #' + res.number + ' · ' + niceDay(res.date);
+    $('endScore').textContent = res.points + ' pts';
+    $('endLine').textContent = n ? correct + ' of ' + n + ' correct.' + (close ? ' ' + close + ' close.' : '') : 'No clips could be played.';
+    $('squares').textContent = squaresOf(res.results);
+    $('answers').innerHTML = res.results.map(r =>
+      '<a class="ans" target="_blank" rel="noopener" href="https://www.youtube.com/shorts/' + esc(r.id) + '">' +
+      '<img loading="lazy" alt="" src="' + Reel.thumb(esc(r.id)) + '"><span class="w"><b>' + Reel.flag(r.country) + ' ' + esc(r.country) + '</b>' +
+      '<span>' + (r.s === 'g' ? (r.lg === 'ok' ? 'League correct too' : esc(r.title || '')) : 'You said ' + esc(r.guess) + (r.km != null ? ' · ' + fmtKm(r.km) + ' off' : '')) + '</span></span>' +
+      '<span class="p">+' + r.gained + '</span><i class="sq ' + r.s + '"></i></a>').join('');
+    shareText = shareOf(res);
+    $('copy').textContent = 'Copy result'; $('copy').disabled = !n;
+    $('again').hidden = res.mode !== 'practice';
+    $('toStats').hidden = res.mode === 'practice';
+    const today = res.mode === 'daily' || res.date === dayKey();
+    $('endNote').innerHTML = res.mode === 'practice' ? 'Practice rounds do not count for the streak.'
+      : today ? 'The next five arrives in <span class="cd">' + untilMidnight() + '</span>.' : 'Archive days do not count for the streak.';
+  }
+  async function copy(text, btn, label) {
+    let done = false;
+    try { await navigator.clipboard.writeText(text); done = true; } catch (e) {
+      try { const t = document.createElement('textarea'); t.value = text; t.style.position = 'fixed'; t.style.opacity = '0';
+        document.body.appendChild(t); t.select(); done = document.execCommand('copy'); t.remove(); } catch (e2) {}
+    }
+    btn.textContent = done ? 'Copied ✓' : 'Copy failed';
+    clearTimeout(btn._t); btn._t = setTimeout(() => { btn.textContent = label; }, 2000);
+  }
+
+  // ---- start screen ----
+  function renderStart() {
+    const s = readStore(), today = dayKey(), rec = s.days[today], st = computeStats();
+    let h;
+    if (!todayDaily) h = '<p class="sub">There are not enough clips to play today.</p>';
+    else if (rec && rec.done) {
+      h = '<h2>Daily #' + rec.number + ' · done</h2><div class="big">' + rec.points + ' pts</div>' +
+        '<div class="squares">' + squaresOf(rec.results) + '</div>' +
+        '<p class="sub">' + correctOf(rec.results) + ' of ' + rec.results.length + ' correct. The next five arrives in <span class="cd">' + untilMidnight() + '</span>.</p>' +
+        '<div class="row"><button class="btn" data-act="result">See result</button><button class="ghost" data-act="share">Copy result</button></div>';
+    } else {
+      const part = rec && rec.results && rec.results.length;
+      h = '<h2>Daily #' + todayDaily.number + ' · ' + niceDay(today) + '</h2>' +
+        '<div class="row"><button class="btn wide" data-act="play">' + (part ? "Resume today's five" : "Play today's five") + '</button></div>' +
+        '<p class="sub">' + (part ? rec.results.length + ' of ' + ROUND + ' played. ' : '') +
+        (todayDaily.local ? 'The shared daily did not load. This five is picked on your device.' : 'Everyone gets the same five clips. Faster answers score more.') + '</p>';
+    }
+    $('dailyCard').innerHTML = h;
+    $('quick').innerHTML = st.played ? '<span class="pill">Streak ' + st.cur + '</span><span class="pill">Played ' + st.played + '</span>' +
+      '<span class="pill">Average ' + st.avg + '</span><button class="ghost" data-act="stats" style="padding:7px 14px;font-size:13px">Stats</button>' : '';
+    $('regions').innerHTML = ['', 'Europe', 'Americas', 'Africa', 'Asia'].map(r =>
+      '<button class="pill' + (r === region ? ' on' : '') + '" data-r="' + r + '">' + (r || 'All') + '</button>').join('');
+    $('random').disabled = !pool.length;
+    $('archiveBox').hidden = !archiveDates.length;
+    $('archive').innerHTML = archiveDates.map(d => { const r = s.days[d];
+      return '<button class="day" data-d="' + d + '"><span class="n">#' + dayNumber(d) + '</span><span class="dt">' + niceDay(d) + '</span>' +
+        (r && r.done ? miniSquares(r.results) + '<span class="go">' + r.points + '</span>' : '<span class="go">' + (r && r.results && r.results.length ? 'Resume' : 'Play') + ' ›</span>') + '</button>'; }).join('');
+    const first = todayDaily && todayDaily.queue[0];
+    $('posterImg').style.backgroundImage = first ? 'url(' + Reel.tall(first.item.id) + '), url(' + Reel.thumb(first.item.id) + ')' : '';
+    veil('');
+  }
+  function resOf(date) { const r = readStore().days[date]; return { mode: date === dayKey() && r.live ? 'daily' : 'archive', date, number: r.number, points: r.points, results: r.results }; }
+
+  // ---- stats screen ----
+  function showStats(from) {
+    statsFrom = from; show('stats');
+    const st = computeStats(), max = Math.max(1, ...st.dist);
+    $('tiles').innerHTML = [['Played', st.played], ['Average score', st.avg], ['Current streak', st.cur], ['Best streak', st.best]]
+      .map(t => '<div><b>' + t[1] + '</b><span>' + t[0] + '</span></div>').join('');
+    const todayRec = st.days[dayKey()], mine = todayRec && todayRec.done ? correctOf(todayRec.results) : -1;
+    $('dist').innerHTML = st.dist.map((n, i) => '<div><span>' + i + '</span><i class="' + (i === mine ? 'hi' : '') + '" style="width:' + Math.round(n / max * 78) + '%"></i><em>' + n + '</em></div>').join('');
+    let w = '';
+    for (let i = 6; i >= 0; i--) { const d = addDays(dayKey(), -i), r = st.days[d], ok = r && r.done;
+      w += '<div><span>' + (i === 0 ? 'Today' : niceDay(d).split(',')[0].split(' ').slice(0, 2).join(' ')) + '</span>' + miniSquares(ok ? r.results : null) + '<em>' + (ok ? r.points + ' pts' : '') + '</em></div>'; }
+    $('week').innerHTML = w;
+  }
+
+  // ---- events ----
+  $('opts').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.disabled) return; if (phase === 'league') guessLeague(b.dataset.c); else guess(b.dataset.c); });
+  $('next').addEventListener('click', onNext);
+  $('quit').addEventListener('click', quit);
+  $('sound').addEventListener('click', () => { patchStore(s => { s.sound = s.sound === false; }); drawSound(); if (phase !== 'loading' && phase !== 'count') applySound(); });
+  $('dailyCard').addEventListener('click', e => {
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    if (b.dataset.act === 'play' && todayDaily) startRound('daily', todayDaily, true);
+    else if (b.dataset.act === 'result') showEnd(resOf(dayKey()));
+    else if (b.dataset.act === 'share') copy(shareOf(resOf(dayKey())), b, 'Copy result');
+  });
+  $('quick').addEventListener('click', e => { if (e.target.closest('[data-act="stats"]')) showStats('start'); });
+  $('regions').addEventListener('click', e => { const b = e.target.closest('[data-r]'); if (!b) return; region = b.dataset.r; patchStore(s => { s.region = region; }); renderStart(); });
+  $('random').addEventListener('click', () => startRound('practice'));
+  $('again').addEventListener('click', () => startRound('practice'));
+  $('archive').addEventListener('click', async e => {
+    const b = e.target.closest('[data-d]'); if (!b) return;
+    const d = b.dataset.d, rec = readStore().days[d];
+    if (rec && rec.done) { showEnd(resOf(d)); return; }
+    b.querySelector('.go').textContent = 'Loading';
+    const daily = await loadDaily(d, false);
+    if (!daily) { b.querySelector('.go').textContent = 'Did not load'; return; }
+    startRound('archive', daily, true);
+  });
+  $('copy').addEventListener('click', () => copy(shareText, $('copy'), 'Copy result'));
+  $('home').addEventListener('click', () => { renderStart(); show('start'); });
+  $('toStats').addEventListener('click', () => showStats('end'));
+  $('statsBack').addEventListener('click', () => { if (statsFrom === 'end' && endRes) show('end'); else { renderStart(); show('start'); } });
+  document.addEventListener('keydown', e => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (view === 'play') {
+      if (e.key >= '1' && e.key <= '4') { const b = $('opts').querySelectorAll('button')[+e.key - 1]; if (b && !b.disabled) b.click(); }
+      else if ((e.key === 'Enter' || e.key === ' ') && !$('next').hidden) { e.preventDefault(); onNext(); }
+      else if (e.key === 'Escape') quit();
+    } else if (view === 'start' && e.key === 'Enter' && !(e.target && e.target.closest && e.target.closest('button'))) {
+      const b = $('dailyCard').querySelector('.btn'); if (b) b.click();
+    }
+  });
+  setInterval(() => { const t = untilMidnight(); document.querySelectorAll('.cd').forEach(el => el.textContent = t); }, 1000);
+
+  // ---- start ----
+  let shownDay = dayKey();
+  async function boot() {
+    shownDay = dayKey();
+    [todayDaily, archiveDates] = await Promise.all([loadDaily(shownDay, true), loadArchive()]);
+    if (view === 'start') renderStart();
+  }
+  setInterval(() => { if (dayKey() !== shownDay && view !== 'play') boot(); }, 30000); // a new day arrived while the page was open
+  await boot();
+})();
+</script>
+</body>
+</html>

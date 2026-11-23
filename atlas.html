@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atlas</title>
+<link rel="stylesheet" href="lib.css">
+<style>
+  body { padding: 52px 16px 24px; }
+  .wrap { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; max-width: 1280px; margin: 0 auto; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
+  h1 { font-size: 20px; margin: 0 8px 0 0; letter-spacing: -.01em; }
+  #stats { color: var(--muted); font-size: 13px; flex: 1 1 160px; }
+  .tools { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tools .pill.live { background: var(--accent); color: #fff; font-weight: 700; }
+  #map { position: relative; background: #0e1014; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  #map svg { display: block; width: 100%; }
+  .grat { stroke: rgba(255,255,255,.07); stroke-width: 1; }
+  .grat.eq { stroke: rgba(255,255,255,.18); }
+  .glab { fill: var(--dim); font-size: 10px; }
+  .dot { cursor: pointer; outline: none; }
+  .dot .halo { fill: var(--accent); opacity: .2; transition: opacity .15s; }
+  .dot .core { fill: var(--accent); stroke: rgba(0,0,0,.55); stroke-width: 1; filter: drop-shadow(0 0 5px rgba(229,50,45,.9)); }
+  .dot:hover .halo, .dot:focus-visible .halo { opacity: .45; }
+  .dot:hover .core, .dot:focus-visible .core { fill: #ff6a5e; }
+  .dot.on .core { fill: #fff; filter: drop-shadow(0 0 8px #fff); }
+  .dot.on .halo { fill: #fff; opacity: .3; animation: pulse 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+  .dot.seen .core { fill: #8c2a27; filter: none; }
+  @keyframes pulse { 50% { transform: scale(1.5); opacity: .08; } }
+  @media (prefers-reduced-motion: reduce) { .dot.on .halo { animation: none; } }
+  .hop { stroke: rgba(255,255,255,.5); stroke-width: 1.5; stroke-dasharray: 4 5; fill: none; }
+  #tip { position: absolute; pointer-events: none; background: rgba(0,0,0,.85); border: 1px solid var(--line); border-radius: 8px;
+    padding: 5px 9px; font-size: 13px; white-space: nowrap; transform: translate(-50%, -100%); display: none; z-index: 2; }
+  #tip b { font-weight: 700; } #tip span { color: var(--muted); }
+  #note { color: var(--dim); font-size: 12px; margin: 8px 2px 0; min-height: 17px; }
+  .else { margin-top: 14px; }
+  .else h2 { font-size: 12px; font-weight: 600; color: var(--muted); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .06em; }
+  #pills { display: flex; gap: 8px; flex-wrap: wrap; }
+  #pills .pill span { color: var(--dim); margin-left: 4px; }
+  #pills .pill.on span { color: rgba(0,0,0,.5); }
+
+  #panel { display: none; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; align-self: start; }
+  body.open #panel { display: block; }
+  .phead { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .phead .name { font-weight: 700; font-size: 16px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .phead .n { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  #close { background: var(--chip); border-radius: 999px; width: 28px; height: 28px; line-height: 1; }
+  #frame { height: min(60vh, 480px); max-width: 100%; margin: 0 auto; cursor: pointer; }
+  #title { font-size: 14px; font-weight: 600; margin: 10px 0 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  #sub { color: var(--muted); font-size: 12px; }
+  #msg { color: var(--muted); font-size: 12px; min-height: 0; }
+  .ctl { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .ctl .pill { flex: 1; text-align: center; padding: 8px 6px; }
+
+  @media (min-width: 720px) {
+    body.open .wrap { grid-template-columns: minmax(0, 1fr) 300px; }
+    #panel { position: sticky; top: 12px; }
+  }
+  @media (max-width: 719px) {
+    body.open { padding-bottom: calc(44vh + 40px); }
+    #panel { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; border-radius: 16px 16px 0 0; border-width: 1px 0 0;
+      box-shadow: 0 -12px 40px rgba(0,0,0,.6); }
+    .pbody { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; }
+    #frame { height: 40vh; margin: 0; }
+    #title { margin-top: 0; -webkit-line-clamp: 4; }
+    .ctl .pill { flex: 1 1 40%; }
+  }
+</style>
+</head>
+<body>
+<a class="back" href="index.html">← Lab</a>
+<div class="wrap">
+  <main>
+    <header>
+      <h1>Atlas</h1>
+      <div id="stats">Loading clips.</div>
+      <div class="tools">
+        <button class="pill" id="view">Zoom to Europe</button>
+        <button class="pill" id="tour">Tour</button>
+        <button class="btn" id="spin">Spin the globe</button>
+      </div>
+    </header>
+    <div id="map"><svg></svg><div id="tip"></div></div>
+    <div id="note">Pick a dot to watch that country's clips.</div>
+    <div class="else" id="else" hidden>
+      <h2>Everywhere else</h2>
+      <div id="pills"></div>
+    </div>
+  </main>
+  <aside id="panel" aria-live="polite">
+    <div class="phead">
+      <div class="name" id="pname"></div>
+      <div class="n" id="pn"></div>
+      <button id="close" aria-label="Close">✕</button>
+    </div>
+    <div class="pbody">
+      <div class="frame" id="frame"></div>
+      <div>
+        <div id="title"></div>
+        <div id="sub"></div>
+        <div id="msg"></div>
+        <div class="ctl">
+          <button class="pill" id="prev">← Prev</button>
+          <button class="pill" id="next">Next →</button>
+          <button class="pill" id="sound">Sound off</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+</div>
+<script src="lib.js"></script>
+<script>
+(function () {
+  const $ = s => document.querySelector(s);
+  const GEO = Reel.GEO, esc = Reel.esc;
+  const VIEWS = {
+    world: { l: -125, r: 155, t: 68, b: -48, step: 30 },
+    europe: { l: -13, r: 41, t: 60, b: 29, step: 10 },
+  };
+  const S = { by: {}, geo: [], other: [], max: 1, cur: null, idx: 0, tour: false, sound: false, view: 'world',
+    token: 0, p: null, errors: 0, visited: new Set(), from: null };
+
+  const inView = (c, v) => { const g = GEO[c]; return g && g[1] >= v.l && g[1] <= v.r && g[0] <= v.t && g[0] >= v.b; };
+
+  function draw() {
+    const box = $('#map'), w = box.clientWidth;
+    if (!w) return;
+    const v = VIEWS[S.view], k = w / (v.r - v.l), h = Math.round((v.t - v.b) * k);
+    const X = lon => (lon - v.l) * k, Y = lat => (v.t - lat) * k;
+    let out = '';
+    for (let lon = Math.ceil(v.l / v.step) * v.step; lon <= v.r; lon += v.step) {
+      out += `<line class="grat" x1="${X(lon)}" x2="${X(lon)}" y1="0" y2="${h}"/>`;
+      if (lon > v.l && lon < v.r) out += `<text class="glab" x="${X(lon) + 3}" y="${h - 4}">${Math.abs(lon)}°${lon < 0 ? 'W' : lon > 0 ? 'E' : ''}</text>`;
+    }
+    for (let lat = Math.ceil(v.b / v.step) * v.step; lat <= v.t; lat += v.step) {
+      out += `<line class="grat${lat === 0 ? ' eq' : ''}" y1="${Y(lat)}" y2="${Y(lat)}" x1="0" x2="${w}"/>`;
+      if (lat < v.t && lat > v.b) out += `<text class="glab" x="4" y="${Y(lat) - 3}">${lat === 0 ? 'Equator' : Math.abs(lat) + '°' + (lat < 0 ? 'S' : 'N')}</text>`;
+    }
+    if (S.tour && S.from && GEO[S.from] && GEO[S.cur] && inView(S.from, v) && inView(S.cur, v)) {
+      const a = GEO[S.from], b = GEO[S.cur];
+      out += `<line class="hop" x1="${X(a[1])}" y1="${Y(a[0])}" x2="${X(b[1])}" y2="${Y(b[0])}"/>`;
+    }
+    const scale = Math.max(.65, Math.min(1.15, w / 800)) * (S.view === 'europe' ? 1.35 : 1);
+    let hidden = 0;
+    S.geo.forEach((c, i) => {
+      if (!inView(c, v)) { hidden++; return; }
+      const n = S.by[c].length, r = (3.5 + 9 * Math.sqrt(n / S.max)) * scale;
+      const x = X(GEO[c][1]).toFixed(1), y = Y(GEO[c][0]).toFixed(1);
+      const cls = 'dot' + (c === S.cur ? ' on' : S.tour && S.visited.has(c) ? ' seen' : '');
+      out += `<g class="${cls}" data-i="${i}" data-x="${x}" data-y="${y}" data-r="${r.toFixed(1)}" tabindex="0" role="button" aria-label="${esc(c)}, ${n} clips">` +
+        `<circle class="halo" cx="${x}" cy="${y}" r="${(r * 2 + 3).toFixed(1)}"/><circle class="core" cx="${x}" cy="${y}" r="${r.toFixed(1)}"/></g>`;
+    });
+    const svg = box.querySelector('svg');
+    svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    svg.setAttribute('height', h);
+    svg.innerHTML = out;
+    $('#tip').style.display = 'none';
+    $('#view').textContent = S.view === 'europe' ? 'Show the world' : 'Zoom to Europe';
+    $('#note').textContent = S.tour ? 'Tour is on. The map moves to a new country after each clip.'
+      : S.view === 'europe' ? hidden + ' countries are outside this view.'
+      : 'Pick a dot to watch that country\'s clips. Bigger dots have more clips.';
+  }
+
+  function drawPills() {
+    $('#else').hidden = !S.other.length;
+    $('#pills').innerHTML = S.other.map((c, i) =>
+      `<button class="pill${c === S.cur ? ' on' : ''}" data-o="${i}">${Reel.flag(c)} ${esc(c)}<span>${S.by[c].length}</span></button>`).join('');
+  }
+
+  function kill() {
+    S.token++;
+    if (S.p) { try { S.p.destroy(); } catch (e) {} S.p = null; }
+  }
+
+  function play() {
+    const list = S.by[S.cur]; if (!list) return;
+    const it = list[S.idx];
+    kill();
+    const t = S.token, frame = $('#frame');
+    $('#pname').textContent = Reel.flag(S.cur) + ' ' + S.cur;
+    $('#pn').textContent = (S.idx + 1) + ' of ' + list.length;
+    $('#title').textContent = it.title;
+    $('#sub').textContent = it.channel + ' · ' + Reel.ago(it.published) + ' ago';
+    $('#msg').textContent = '';
+    frame.innerHTML = '';
+    frame.style.backgroundImage = `url(${Reel.tall(it.id)})`;
+    Reel.player(frame, it.id, {
+      onEnd: () => { if (t === S.token) ended(); },
+      onError: () => { if (t === S.token) failed(); },
+      onPlaying: p => { if (t !== S.token) return; S.errors = 0; if (S.sound) { try { p.unMute(); } catch (e) {} } },
+    }).then(p => {
+      if (t !== S.token) { try { p.destroy(); } catch (e) {} return; }
+      S.p = p;
+    });
+  }
+
+  function step(d) {
+    const n = S.by[S.cur].length;
+    S.idx = (S.idx + d + n) % n;
+    play();
+  }
+  function ended() { if (S.tour) hop(); else step(1); }
+  function failed() {
+    const n = S.by[S.cur].length;
+    S.errors++;
+    if (S.errors >= Math.min(n, 4)) {
+      S.errors = 0;
+      if (S.tour) return hop();
+      kill(); $('#frame').innerHTML = '';
+      $('#msg').textContent = 'These clips cannot be played here. Try another country.';
+      return;
+    }
+    step(1);
+  }
+
+  function open(c, idx) {
+    if (!S.by[c]) return;
+    S.cur = c; S.idx = idx || 0; S.errors = 0;
+    if (GEO[c] && !inView(c, VIEWS[S.view])) S.view = 'world';
+    document.body.classList.add('open');
+    draw(); drawPills(); play();
+  }
+
+  function close() {
+    kill();
+    $('#frame').innerHTML = ''; $('#frame').style.backgroundImage = '';
+    S.cur = null; setTour(false);
+    document.body.classList.remove('open');
+    draw(); drawPills();
+  }
+
+  function spin() {
+    const pool = S.geo.filter(c => c !== S.cur);
+    if (!pool.length) return;
+    S.from = null;
+    open(pool[Math.floor(Math.random() * pool.length)]);
+  }
+
+  // Tour: move to one of the nearest countries not yet visited, so the route reads as a journey.
+  function hop() {
+    if (S.cur) S.visited.add(S.cur);
+    let pool = S.geo.filter(c => !S.visited.has(c));
+    if (!pool.length) { S.visited = new Set(S.cur ? [S.cur] : []); pool = S.geo.filter(c => c !== S.cur); }
+    if (!pool.length) return;
+    let next;
+    const a = GEO[S.cur];
+    if (a) {
+      const d = c => { const g = GEO[c]; let dl = Math.abs(g[1] - a[1]); if (dl > 180) dl = 360 - dl; return Math.hypot(dl, g[0] - a[0]); };
+      pool.sort((p, q) => d(p) - d(q));
+      next = pool[Math.floor(Math.random() * Math.min(3, pool.length))];
+    } else next = pool[Math.floor(Math.random() * pool.length)];
+    S.from = GEO[S.cur] ? S.cur : null;
+    open(next);
+  }
+
+  function setTour(on) {
+    S.tour = on;
+    if (!on) { S.from = null; S.visited = new Set(); }
+    $('#tour').classList.toggle('live', on);
+    $('#tour').textContent = on ? 'Stop tour' : 'Tour';
+  }
+
+  function setSound(on) {
+    S.sound = on;
+    $('#sound').textContent = on ? 'Sound on' : 'Sound off';
+    $('#sound').classList.toggle('on', on);
+    if (S.p) { try { on ? S.p.unMute() : S.p.mute(); } catch (e) {} }
+  }
+
+  // Events
+  const svg = $('#map svg'), tip = $('#tip');
+  const dotOf = e => e.target.closest && e.target.closest('.dot');
+  svg.addEventListener('click', e => { const d = dotOf(e); if (d) { S.from = null; open(S.geo[+d.dataset.i]); } });
+  svg.addEventListener('keydown', e => {
+    const d = dotOf(e);
+    if (d && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); S.from = null; open(S.geo[+d.dataset.i]); }
+  });
+  function showTip(d) {
+    const c = S.geo[+d.dataset.i], n = S.by[c].length, w = $('#map').clientWidth;
+    tip.innerHTML = `${Reel.flag(c)} <b>${esc(c)}</b> <span>${n} clip${n === 1 ? '' : 's'}</span>`;
+    tip.style.display = 'block';
+    const half = tip.offsetWidth / 2 + 4, y = +d.dataset.y - +d.dataset.r - 8;
+    tip.style.left = Math.max(half, Math.min(w - half, +d.dataset.x)) + 'px';
+    tip.style.top = (y < 30 ? +d.dataset.y + +d.dataset.r + 36 : y) + 'px';
+  }
+  svg.addEventListener('mouseover', e => { const d = dotOf(e); if (d) showTip(d); else tip.style.display = 'none'; });
+  svg.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+  svg.addEventListener('focusin', e => { const d = dotOf(e); if (d) showTip(d); });
+  $('#pills').addEventListener('click', e => {
+    const b = e.target.closest('[data-o]'); if (!b) return;
+    setTour(false); open(S.other[+b.dataset.o]);
+  });
+  $('#spin').onclick = spin;
+  $('#tour').onclick = () => {
+    setTour(!S.tour);
+    if (S.tour && (!S.cur || !GEO[S.cur])) spin(); else draw();
+  };
+  $('#view').onclick = () => { S.view = S.view === 'world' ? 'europe' : 'world'; draw(); };
+  $('#prev').onclick = () => S.cur && step(-1);
+  $('#next').onclick = () => S.cur && (S.tour ? hop() : step(1));
+  $('#sound').onclick = () => setSound(!S.sound);
+  $('#frame').onclick = () => setSound(!S.sound);
+  $('#close').onclick = close;
+  document.addEventListener('keydown', e => {
+    if (!S.cur || e.target.closest('.dot')) return;
+    if (e.key === 'ArrowRight') $('#next').click();
+    else if (e.key === 'ArrowLeft') $('#prev').click();
+    else if (e.key === 'Escape') close();
+  });
+  let lastW = 0;
+  new ResizeObserver(() => { const w = $('#map').clientWidth; if (w !== lastW) { lastW = w; draw(); } }).observe($('#map'));
+
+  Reel.load().then(items => {
+    for (const it of items) (S.by[it.country || 'World'] = S.by[it.country || 'World'] || []).push(it);
+    const all = Object.keys(S.by);
+    S.geo = all.filter(c => GEO[c]).sort((a, b) => S.by[b].length - S.by[a].length);
+    S.other = all.filter(c => !GEO[c]).sort((a, b) => S.by[b].length - S.by[a].length);
+    S.max = Math.max(1, ...S.geo.map(c => S.by[c].length));
+    $('#stats').textContent = items.length
+      ? `${items.length} clips from ${S.geo.length} countries.`
+      : 'The feed has no clips right now.';
+    draw(); drawPills();
+  }).catch(() => { $('#stats').textContent = 'The feed did not load.'; draw(); });
+})();
+</script>
+</body>
+</html>

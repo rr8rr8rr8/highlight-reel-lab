@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Football TV</title>
+<link rel="stylesheet" href="lib.css">
+<style>
+  html, body { height: 100%; overflow: hidden; }
+  body { --ticker: 34px; --side: 220px;
+    --clipw: min(calc((100dvh - var(--ticker) - 16px) * 9 / 16), calc(100vw - 2 * var(--side)));
+    display: grid; grid-template-columns: minmax(var(--side), 1fr) var(--clipw) minmax(var(--side), 1fr);
+    grid-template-rows: minmax(0, 1fr) var(--ticker); height: 100vh; height: 100dvh; background: #000; }
+  .chrome { transition: opacity .6s ease; }
+  body.idle { cursor: none; }
+  body.idle .chrome { opacity: 0; pointer-events: none; }
+
+  /* Blurred drifting backdrop */
+  #bd { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: #050505; }
+  #bd div { position: absolute; inset: -12%; background: center / cover no-repeat; filter: blur(38px) brightness(.55) saturate(1.3);
+    opacity: 0; transition: opacity 1s ease; animation: drift 46s ease-in-out infinite alternate; will-change: transform; }
+  #bd div.on { opacity: 1; }
+  #bd::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,.55) 100%); }
+  @keyframes drift { from { transform: translate(-3%, -2%) scale(1.05); } to { transform: translate(3%, 2%) scale(1.2); } }
+
+  /* Clip */
+  #clip { grid-column: 2; grid-row: 1; align-self: center; position: relative; z-index: 2; width: var(--clipw); aspect-ratio: 9 / 16;
+    background: #111 center / cover no-repeat; border-radius: 10px; overflow: hidden; box-shadow: 0 10px 60px rgba(0,0,0,.7); }
+  #mount, #mount > div { position: absolute; inset: 0; }
+  #msg { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; text-align: center; padding: 20px;
+    color: var(--muted); pointer-events: none; }
+  #ident { position: absolute; inset: 0; z-index: 5; overflow: hidden; background: #0b0b0b; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; text-align: center; opacity: 0; pointer-events: none; transition: opacity .35s ease; }
+  #ident.on { opacity: 1; }
+  #ident .ibg { position: absolute; inset: -15%; background: center / cover no-repeat; filter: blur(26px) brightness(.42) saturate(1.2); }
+  #ident .n { position: relative; font: 800 96px/1 ui-monospace, Menlo, monospace; color: var(--fg); letter-spacing: -.04em; }
+  #ident .t { position: relative; margin-top: 10px; font-size: 20px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; padding: 0 16px; }
+  #ident .bar { position: relative; width: 44px; height: 4px; background: var(--accent); margin-top: 16px; border-radius: 2px; }
+  #lower { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; pointer-events: none; height: 150px; opacity: 0; transition: opacity .6s ease; }
+  body:not(.idle) #lower, #lower.show { opacity: 1; }
+  #lower .lt { position: absolute; left: 0; right: 0; bottom: 0; padding: 56px 14px 14px; background: linear-gradient(transparent, rgba(0,0,0,.92));
+    display: flex; gap: 10px; align-items: flex-end; opacity: 0; transition: opacity .7s ease; }
+  #lower .lt.on { opacity: 1; }
+  .lt .fl { font-size: 28px; line-height: 1; }
+  .lt .tx { min-width: 0; flex: 1; }
+  .lt .ti { font-weight: 700; font-size: 15px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .lt .me { color: var(--muted); font-size: 12px; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lt .sc, .np .sc { display: inline-block; background: var(--accent); border-radius: 4px; padding: 2px 7px; font-size: 12px; font-weight: 700; margin-bottom: 5px; }
+  #sound { position: absolute; z-index: 7; bottom: 132px; left: 50%; transform: translateX(-50%); box-shadow: 0 4px 24px rgba(0,0,0,.6); white-space: nowrap; }
+  #osd { position: absolute; z-index: 6; top: 26%; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.78); border-radius: 10px;
+    padding: 10px 14px; opacity: 0; transition: opacity .25s; pointer-events: none; white-space: nowrap; font-weight: 700; text-align: center; }
+  #osd.on { opacity: 1; }
+  #osd .big { font: 800 40px/1 ui-monospace, Menlo, monospace; color: var(--good); }
+  #osd .vb { width: 150px; height: 6px; background: rgba(255,255,255,.2); border-radius: 3px; margin-top: 8px; overflow: hidden; }
+  #osd .vb i { display: block; height: 100%; background: var(--fg); }
+  #bug { display: none; }
+
+  /* Side panels */
+  .side { position: relative; z-index: 2; grid-row: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding: 56px 20px 14px; }
+  .side > * { width: 100%; max-width: 320px; }
+  #left { grid-column: 1; align-items: flex-end; }
+  #right { grid-column: 3; align-items: flex-start; padding-top: 14px; }
+  .chid { display: flex; align-items: center; gap: 12px; }
+  .chid .num { font: 800 46px/1 ui-monospace, Menlo, monospace; color: var(--fg); letter-spacing: -.04em; }
+  .chid .cname { font-size: 17px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; line-height: 1.15; }
+  .chid .cmeta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .hd { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); margin: 22px 0 8px; }
+  .np { animation: fade .7s ease; min-height: 0; overflow: hidden; }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  .np .fl { font-size: 34px; line-height: 1; margin-bottom: 8px; }
+  .np .ti { font-size: 17px; font-weight: 700; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+  .np .me { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .np .lg { font-size: 13px; margin-top: 12px; font-weight: 700; }
+  .np .tm { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .np .sc { margin: 10px 0 0; font-size: 14px; padding: 4px 9px; }
+  #controls { margin-top: auto; padding-top: 12px; display: flex; flex-wrap: wrap; gap: 6px; flex: none; }
+  #controls button, .pbtn { background: rgba(255,255,255,.14); border-radius: 999px; padding: 7px 11px; font-size: 12px; white-space: nowrap; backdrop-filter: blur(8px); }
+  #controls button:hover { background: rgba(255,255,255,.28); }
+  #controls kbd { font: 700 10px/1 ui-monospace, Menlo, monospace; color: var(--dim); margin-left: 5px; }
+  #clock { font: 700 22px/1 ui-monospace, Menlo, monospace; text-align: right; color: var(--fg); height: 26px; flex: none; }
+  #right .hd { margin-top: 16px; }
+  #next { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow: hidden; }
+  .nx { display: flex; gap: 10px; align-items: center; width: 100%; padding: 6px; background: rgba(0,0,0,.35); border-radius: 10px; text-align: left; flex: none; }
+  .nx:hover { background: rgba(255,255,255,.14); }
+  .nx img { flex: none; width: 50px; height: 80px; object-fit: cover; border-radius: 6px; background: #111; }
+  .nx .t { font-size: 13px; line-height: 1.25; font-weight: 600; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .nx .s { font-size: 11px; color: var(--muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nx > div { min-width: 0; }
+  @media (max-height: 560px) { .nx:nth-child(n+4) { display: none; } .np .ti { -webkit-line-clamp: 2; } .hd { margin-top: 12px; } }
+  @media (max-height: 440px) { .nx:nth-child(n+3) { display: none; } .np .lg, .np .tm { display: none; } }
+
+  /* Ticker */
+  #ticker { grid-row: 2; grid-column: 1 / -1; position: relative; z-index: 3; border-top: 1px solid var(--line); background: rgba(12,12,12,.92); overflow: hidden;
+    display: flex; align-items: center; font-size: 13px; white-space: nowrap; }
+  #ticker .lab { flex: none; background: var(--accent); align-self: stretch; display: flex; align-items: center; padding: 0 10px; font-weight: 800;
+    font-size: 11px; letter-spacing: .08em; text-transform: uppercase; z-index: 1; }
+  #run { display: flex; flex: none; animation: run 60s linear infinite; will-change: transform; }
+  #ticker:hover #run { animation-play-state: paused; }
+  #run span { padding: 0 22px; color: var(--muted); }
+  #run span b { color: var(--fg); }
+  #run span.first { border-left: 2px solid var(--accent); }
+  @keyframes run { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+  /* Guide */
+  #guide { position: fixed; inset: 0; z-index: 60; background: rgba(6,6,6,.9); backdrop-filter: blur(14px); display: none; flex-direction: column; }
+  #guide.open { display: flex; }
+  #guide header { display: flex; align-items: baseline; gap: 14px; padding: 14px 18px 10px 96px; border-bottom: 1px solid var(--line); flex: none; }
+  #guide header h2 { margin: 0; font-size: 16px; letter-spacing: .08em; text-transform: uppercase; }
+  #guide header span { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+  #guide header button { background: var(--chip); border-radius: 999px; padding: 6px 12px; font-size: 12px; flex: none; }
+  #grid { overflow: auto; flex: 1; padding-bottom: 20px; }
+  .grow { display: flex; width: max-content; min-width: 100%; border-bottom: 1px solid #1c1c1c; }
+  .gch { position: sticky; left: 0; z-index: 2; flex: none; width: 150px; background: #101010; border-right: 1px solid var(--line); padding: 8px 10px;
+    display: flex; flex-direction: column; justify-content: center; text-align: left; border-radius: 0; }
+  .gch b { font: 800 18px/1 ui-monospace, Menlo, monospace; color: var(--dim); }
+  .gch span { font-size: 13px; font-weight: 700; margin-top: 4px; line-height: 1.15; }
+  .gch small { font-size: 11px; color: var(--dim); margin-top: 2px; }
+  .grow.cur .gch { background: #1d1d1d; } .grow.cur .gch b { color: var(--accent); }
+  .gc { flex: none; display: flex; gap: 8px; align-items: center; height: 78px; margin: 4px 0 4px 4px; padding: 5px 8px 5px 5px; background: #181818;
+    border-radius: 8px; text-align: left; border: 2px solid transparent; overflow: hidden; }
+  .gc img { flex: none; width: 38px; height: 64px; object-fit: cover; border-radius: 4px; background: #222; }
+  .gc .t { font-size: 12px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .gc .s { font-size: 10px; color: var(--dim); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gc > div { min-width: 0; }
+  .gc.now { background: #3a1513; } .gc.now .s { color: #ff8f8b; }
+  .gc.sel { border-color: var(--fg); background: #2a2a2a; }
+  .gc.now.sel { background: #4a1c19; }
+
+  /* Phone sheet (hidden on desktop) */
+  #ptop, #handle, #sheet { display: none; }
+
+  @media (min-width: 1400px) { .np .ti { font-size: 20px; } .chid .num { font-size: 56px; } .nx img { width: 58px; height: 94px; } .nx .t { font-size: 14px; } }
+  @media (max-width: 720px) {
+    body { display: block; }
+    #left, #right, #ticker { display: none; }
+    #clip { position: fixed; inset: 0; width: 100vw; height: 100dvh; aspect-ratio: auto; border-radius: 0; }
+    #mount { inset: auto; left: 50%; top: 50%; width: max(100vw, calc(100dvh * 9 / 16)); aspect-ratio: 9 / 16; transform: translate(-50%, -50%); }
+    #bug { display: block; position: absolute; z-index: 4; top: 12px; left: 84px; max-width: calc(100% - 84px - 112px); background: rgba(0,0,0,.65); border-radius: 999px;
+      padding: 6px 11px; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #bug b { color: var(--accent); font-family: ui-monospace, Menlo, monospace; margin-right: 6px; }
+    #ptop { display: flex; gap: 6px; position: fixed; z-index: 8; top: 10px; right: 10px; }
+    .pbtn { background: rgba(0,0,0,.65); padding: 7px 11px; font-size: 14px; }
+    #sound { bottom: 176px; }
+    #lower { bottom: 34px; }
+    #handle { display: flex; position: fixed; z-index: 8; left: 0; right: 0; bottom: 0; height: 34px; align-items: center; justify-content: center; gap: 8px;
+      background: rgba(0,0,0,.85); font-size: 12px; color: var(--muted); width: 100%; border-radius: 0; }
+    #handle::before { content: ""; width: 34px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.4); }
+    #sheet { display: flex; flex-direction: column; position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; max-height: 72dvh; background: #141414;
+      border-radius: 16px 16px 0 0; transform: translateY(105%); transition: transform .28s ease; box-shadow: 0 -10px 40px rgba(0,0,0,.6); }
+    #sheet.open { transform: none; }
+    #sheet h3 { margin: 0; padding: 14px 16px 8px; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); flex: none; }
+    #sheet h3::before { content: ""; display: block; width: 34px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.3); margin: 0 auto 12px; }
+    #slist { overflow-y: auto; padding: 0 8px 16px; }
+    .sch { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: transparent; border-radius: 10px; padding: 11px 10px; font-size: 15px; }
+    .sch b { font: 700 13px/1 ui-monospace, Menlo, monospace; color: var(--dim); min-width: 22px; }
+    .sch small { margin-left: auto; color: var(--dim); font-size: 12px; }
+    .sch.on { background: var(--fg); color: #000; font-weight: 700; } .sch.on b, .sch.on small { color: rgba(0,0,0,.55); }
+    #ident .n { font-size: 110px; }
+    #guide header { padding-left: 18px; padding-top: 50px; }
+    .gch { width: 104px; }
+  }
+  @media (max-width: 720px) and (min-aspect-ratio: 3/4) { #mount { width: calc(100dvh * 9 / 16); } }
+  @media (prefers-reduced-motion: reduce) { #bd div { animation: none; } }
+</style>
+</head>
+<body>
+<a class="back chrome" href="index.html">← Lab</a>
+<div id="bd"><div></div><div></div></div>
+
+<aside id="left" class="side chrome" aria-label="Channel and now playing">
+  <div class="chid" id="chid"></div>
+  <div class="hd">Now playing</div>
+  <div id="np"></div>
+  <div id="controls">
+    <button data-act="guide" title="Programme guide">Guide<kbd>G</kbd></button>
+    <button data-act="chdown" title="Channel down">CH −<kbd>↓</kbd></button>
+    <button data-act="chup" title="Channel up">CH +<kbd>↑</kbd></button>
+    <button data-act="last" title="Last channel">Last<kbd>L</kbd></button>
+    <button data-act="prev" title="Previous clip">◀ Prev</button>
+    <button data-act="next" title="Next clip">Next ▶</button>
+    <button data-act="mute" id="muteBtn" title="Sound">Sound off<kbd>M</kbd></button>
+    <button data-act="full" title="Fullscreen">Fullscreen<kbd>F</kbd></button>
+  </div>
+</aside>
+
+<main id="clip">
+  <div id="mount"></div>
+  <div id="msg">Loading the feed.</div>
+  <div id="bug" class="chrome"></div>
+  <div id="lower"><div class="lt"></div><div class="lt"></div></div>
+  <div id="ident"><div class="ibg"></div><div class="n"></div><div class="t"></div><div class="bar"></div></div>
+  <div id="osd"></div>
+  <button id="sound" class="btn" hidden>🔊 Turn sound on</button>
+</main>
+
+<aside id="right" class="side chrome" aria-label="Up next">
+  <div id="clock"></div>
+  <div class="hd">Up next</div>
+  <div id="next"></div>
+</aside>
+
+<div id="ticker" class="chrome"><div class="lab">Scores</div><div id="run"></div></div>
+
+<div id="ptop" class="chrome">
+  <button class="pbtn" data-act="mute" id="pMute" aria-label="Sound">🔇</button>
+  <button class="pbtn" data-act="sheet" aria-label="Channels">☰</button>
+</div>
+<button id="handle" class="chrome" data-act="sheet">Swipe up for channels</button>
+<div id="sheet"><h3>Channels</h3><div id="slist"></div></div>
+
+<div id="guide" role="dialog" aria-label="Programme guide">
+  <header><h2>Guide</h2><span>Arrow keys move. Enter tunes. Esc closes.</span><button data-act="guide">Close</button></header>
+  <div id="grid"></div>
+</div>
+
+<script src="lib.js"></script>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const esc = Reel.esc;
+  const REGIONS = ['UK & Ireland', 'Europe', 'South America', 'Africa', 'Asia & Oceania', 'N & C America', 'Middle East', 'Clubs', 'Global'];
+  const KEY = 'reel.tv.state';
+  const MIN = 6;
+  const phone = window.matchMedia('(max-width: 720px)');
+
+  const RX_GOAL = /\b(goals?|gols?|goles|golazo|gola[cç]o|golos?|scores?|scored|strike|screamer|finish|free.?kick|volley|header|brace|hat.?trick|winner|equali[sz]er)\b|⚽/i;
+  const RX_SAVE = /\b(saves?|saved|parada|parad[oó]n|atajad[oó]?n?a?|defesa|keeper|goalkeeper|goalie|portero|arquero|goleiro|denied|denies|stops?)\b|🧤/i;
+  const RX_WOMEN = /(women|femenin|femenil|feminin|f[eé]minine|frauen|ladies|lionesses|\bwsl\b|\bnwsl\b|\bliga f\b|\buwcl\b|w-league|damallsvenskan)/i;
+  const RX_OFF = /\b(interview|press conference|training|behind the scenes|vlog|challenge|quiz|reaction|unboxing|podcast|trailer|arrivals?|tunnel cam|warm.?up|entrenamiento|rueda de prensa|entrevista|photoshoot|kit launch|birthday|giveaway)\b/i;
+
+  let state = { ch: null, last: null, pos: {}, sound: false, vol: 100 };
+  try { Object.assign(state, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) {}
+  if (!state.pos || typeof state.pos !== 'object') state.pos = {};
+  if (typeof state.vol !== 'number') state.vol = 100;
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+
+  let channels = [];      // { num, name, items, pos, loose }
+  let cur = 0, lastCh = -1;
+  let player = null, token = 0, errors = 0, watchdog = null;
+  let muted = true, interacted = false;
+  let identTimer = null, identUntil = 0, lowerTimer = null, osdTimer = null, idleTimer = null;
+  let digits = '', digitTimer = null;
+  let gsel = { r: 0, c: 0 };
+
+  // ---------- channels ----------
+  function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  // Round-robin by country so neighbouring clips come from different countries
+  function mix(items) {
+    const by = new Map();
+    for (const v of items) { if (!by.has(v.country)) by.set(v.country, []); by.get(v.country).push(v); }
+    const queues = shuffle([...by.values()].map(q => q.slice()));
+    const out = [];
+    let left = true;
+    while (left) { left = false; for (const q of queues) { if (q.length) { out.push(q.shift()); left = true; } } }
+    return out;
+  }
+  const leagueKey = v => ((v.ctx && v.ctx.league) || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  function build(all) {
+    const list = [];
+    // Action clips only; fall back to every clip when action alone cannot fill a channel
+    const add = (name, pool, mixed) => {
+      const act = pool.filter(v => v.action && !RX_OFF.test(v.title));
+      let items = act, loose = false;
+      if (items.length < MIN) { items = pool; loose = true; }
+      if (items.length < MIN) return;
+      list.push({ name, items: mixed ? mix(items) : items.slice(), pos: 0, loose });
+    };
+    const now = Date.now();
+    add('World mix', all, true);
+    add('Today', all.filter(v => now - new Date(v.published) < 864e5), false);
+    add('Goals', all.filter(v => RX_GOAL.test(v.title)), true);
+    add('Saves', all.filter(v => RX_SAVE.test(v.title)), true);
+    add("Women's football", all.filter(v => RX_WOMEN.test(((v.ctx && v.ctx.league) || '') + ' ' + v.channel + ' ' + v.title)), true);
+    const groups = [...new Set(all.map(v => v.group).filter(Boolean))];
+    for (const g of REGIONS.filter(n => groups.includes(n)).concat(groups.filter(n => !REGIONS.includes(n)))) add(g, all.filter(v => v.group === g), true);
+    const lg = new Map();
+    for (const v of all) {
+      const k = leagueKey(v);
+      if (!k || !v.action) continue;
+      if (!lg.has(k)) lg.set(k, { name: v.ctx.league, n: 0 });
+      lg.get(k).n++;
+    }
+    [...lg.entries()].sort((a, b) => b[1].n - a[1].n).slice(0, 5).forEach(([k, o]) => add(o.name, all.filter(v => leagueKey(v) === k), false));
+    list.forEach((c, i) => {
+      c.num = i + 1;
+      const id = state.pos[c.name];
+      const p = id ? c.items.findIndex(v => v.id === id) : -1;
+      if (p >= 0) c.pos = p;
+    });
+    channels = list;
+  }
+
+  // ---------- rendering ----------
+  const pad = n => String(n).padStart(2, '0');
+  const img = (id, cls) => `<img ${cls || ''} src="${Reel.tall(id)}" data-fb="${Reel.thumb(id)}" alt="" loading="lazy">`;
+  document.addEventListener('error', e => {
+    const t = e.target;
+    if (t && t.tagName === 'IMG' && t.dataset.fb) { const f = t.dataset.fb; delete t.dataset.fb; t.src = f; }
+  }, true);
+  const bgUrl = id => `url(${Reel.tall(id)}), url(${Reel.thumb(id)})`;
+
+  function scoreText(v) {
+    const s = v.ctx && v.ctx.score;
+    if (!s || s.h == null || s.a == null || !s.home || !s.away) return '';
+    return `${s.home} ${s.h}–${s.a} ${s.away}`;
+  }
+
+  function swap(pair, fill) {    // crossfade between two stacked layers
+    const a = pair[0].classList.contains('on') ? pair[0] : pair[1], b = a === pair[0] ? pair[1] : pair[0];
+    fill(b); b.classList.add('on'); a.classList.remove('on');
+  }
+
+  function renderNow() {
+    const c = channels[cur], v = c.items[c.pos], sc = scoreText(v), ctx = v.ctx || {};
+    $('chid').innerHTML = `<span class="num">${pad(c.num)}</span><div><div class="cname">${esc(c.name)}</div>` +
+      `<div class="cmeta">Clip ${c.pos + 1} of ${c.items.length}</div></div>`;
+    $('bug').innerHTML = `<b>${pad(c.num)}</b>${esc(c.name)}`;
+    const teams = [...new Set((ctx.teams || []).map(t => t.name))].slice(0, 3);
+    $('np').innerHTML = `<div class="np"><div class="fl">${Reel.flag(v.country)}</div><div class="ti">${esc(v.title)}</div>` +
+      `<div class="me">${esc(v.channel)} · ${esc(v.country)} · ${Reel.ago(v.published)} ago</div>` +
+      (ctx.league ? `<div class="lg">${esc(ctx.league)}</div>` : '') +
+      (teams.length && !sc ? `<div class="tm">${esc(teams.join(' · '))}</div>` : '') +
+      (sc ? `<div class="sc">${esc(sc)}</div>` : '') + '</div>';
+    swap($('lower').children, el => {
+      el.innerHTML = `<div class="fl">${Reel.flag(v.country)}</div><div class="tx">` + (sc ? `<div class="sc">${esc(sc)}</div>` : '') +
+        `<div class="ti">${esc(v.title)}</div><div class="me">${esc(v.channel)} · ${esc(v.country)}</div></div>`;
+    });
+    $('lower').classList.add('show');
+    clearTimeout(lowerTimer);
+    lowerTimer = setTimeout(() => $('lower').classList.remove('show'), 7000);
+    swap($('bd').children, el => { el.style.backgroundImage = bgUrl(v.id); });
+    let h = '';
+    const n = Math.min(4, c.items.length - 1);
+    for (let k = 1; k <= n; k++) {
+      const u = c.items[(c.pos + k) % c.items.length];
+      h += `<button class="nx" data-skip="${k}" title="${esc(u.title)}">${img(u.id)}<div><div class="t">${esc(u.title)}</div>` +
+        `<div class="s">${Reel.flag(u.country)} ${esc(u.channel)}</div></div></button>`;
+    }
+    $('next').innerHTML = h;
+  }
+
+  function renderSheet() {
+    $('slist').innerHTML = channels.map((c, i) =>
+      `<button class="sch${i === cur ? ' on' : ''}" data-ch="${i}"><b>${pad(c.num)}</b>${esc(c.name)}<small>${c.items.length}</small></button>`).join('');
+  }
+
+  function renderTicker(all) {
+    const by = new Map(), seen = new Set();
+    for (const v of all) {
+      const t = scoreText(v);
+      if (!t || seen.has(t)) continue;
+      seen.add(t);
+      const lg = (v.ctx && v.ctx.league) || v.country;
+      if (!by.has(lg)) by.set(lg, []);
+      by.get(lg).push(t);
+    }
+    let html = '';
+    for (const [lg, arr] of [...by.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0])))
+      arr.forEach((t, i) => { html += `<span${i ? '' : ' class="first"'}>${esc(lg)} · <b>${esc(t)}</b></span>`; });
+    if (!html) for (const v of all.filter(x => x.action).slice(0, 20)) html += `<span>${Reel.flag(v.country)} ${esc(v.title)}</span>`;
+    const run = $('run');
+    run.innerHTML = html;
+    const w = run.scrollWidth || 2000;
+    const reps = Math.max(1, Math.ceil(window.innerWidth * 1.2 / w));
+    run.innerHTML = html.repeat(reps * 2);        // doubled for a seamless loop
+    run.style.animationDuration = Math.round(w * reps / 55) + 's';   // 55 px per second, whatever the length
+  }
+
+  function tick() { const d = new Date(); $('clock').textContent = pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+
+  function osd(html, ms) {
+    const o = $('osd');
+    o.innerHTML = html; o.classList.add('on');
+    clearTimeout(osdTimer);
+    osdTimer = setTimeout(() => o.classList.remove('on'), ms || 1400);
+  }
+
+  // ---------- playback ----------
+  function ident(v) {
+    const c = channels[cur], el = $('ident');
+    el.querySelector('.ibg').style.backgroundImage = bgUrl(v.id);
+    el.querySelector('.n').textContent = pad(c.num);
+    el.querySelector('.t').textContent = c.name;
+    el.classList.add('on');
+    identUntil = Date.now() + 1000;
+    clearTimeout(identTimer);
+    identTimer = setTimeout(() => el.classList.remove('on'), 4500);   // never sit on the bumper for long
+  }
+  function identOff() {
+    clearTimeout(identTimer);
+    identTimer = setTimeout(() => $('ident').classList.remove('on'), Math.max(0, identUntil - Date.now()));
+  }
+
+  function kill() {
+    clearTimeout(watchdog);
+    if (player) { try { player.destroy(); } catch (e) {} player = null; }
+    $('mount').innerHTML = '';
+  }
+
+  function play() {
+    const c = channels[cur];
+    if (!c || !c.items.length) return;
+    const v = c.items[c.pos], my = ++token;
+    kill();
+    state.ch = c.name; state.pos[c.name] = v.id; save();
+    ident(v);
+    renderNow();
+    $('clip').style.backgroundImage = bgUrl(v.id);
+    $('msg').textContent = '';
+    if ($('guide').classList.contains('open')) renderGuide();
+    const host = document.createElement('div');
+    $('mount').appendChild(host);
+    const fail = () => {
+      if (my !== token) return;
+      errors++;
+      if (errors > 12) { kill(); $('ident').classList.remove('on'); $('msg').textContent = 'Clips are not loading. Press Next to try again.'; errors = 0; return; }
+      step(1, true);
+    };
+    watchdog = setTimeout(() => { if (my === token && !document.hidden) fail(); }, 12000);
+    Reel.player(host, v.id, {
+      muted,
+      onPlaying: () => { if (my === token) { errors = 0; clearTimeout(watchdog); identOff(); } },
+      onEnd: () => { if (my === token) step(1, true); },
+      onError: fail,
+    }).then(p => {
+      if (my !== token) { try { p.destroy(); } catch (e) {} return; }
+      player = p;
+      if (!muted) { try { p.unMute(); p.setVolume(state.vol); } catch (e) {} }
+    }).catch(fail);
+  }
+
+  function step(d, auto) {
+    const c = channels[cur], n = c.items.length;
+    if (!n) return;
+    if (!auto) errors = 0;
+    c.pos = ((c.pos + d) % n + n) % n;
+    play();
+  }
+
+  function tune(i, pos) {
+    const n = channels.length;
+    if (!n) return;
+    i = ((i % n) + n) % n;
+    const c = channels[i];
+    if (i === cur && pos == null && player) { osd(`<div class="big">${pad(c.num)}</div>${esc(c.name)}`); return; }
+    if (i !== cur) { lastCh = cur; state.last = channels[cur].name; }
+    cur = i; errors = 0;
+    if (pos != null) c.pos = ((pos % c.items.length) + c.items.length) % c.items.length;
+    renderSheet();
+    play();
+  }
+
+  // ---------- sound ----------
+  function setMuted(m, quiet) {
+    muted = m;
+    if (!quiet) { state.sound = !m; save(); }
+    $('sound').hidden = !m;
+    $('muteBtn').firstChild.nodeValue = m ? 'Sound off' : 'Sound on';
+    $('pMute').textContent = m ? '🔇' : '🔊';
+    if (player) { try { if (m) player.mute(); else { player.unMute(); player.setVolume(state.vol); player.playVideo(); } } catch (e) {} }
+  }
+  function volume(d) {
+    state.vol = Math.max(0, Math.min(100, state.vol + d)); save();
+    if (muted && d > 0) setMuted(false);
+    if (player) { try { player.setVolume(state.vol); } catch (e) {} }
+    osd(`Volume ${state.vol}<div class="vb"><i style="width:${state.vol}%"></i></div>`);
+  }
+  // A remembered "sound on" is applied on the first real interaction (browsers block it before that)
+  function firstTouch(e) {
+    if (interacted) return;
+    interacted = true;
+    if (state.sound && muted && !(e && e.target && e.target.closest && e.target.closest('[data-act="mute"]'))) setMuted(false);
+  }
+
+  // ---------- guide ----------
+  const cellW = id => { let h = 0; for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return 150 + (h % 5) * 24; };
+  function renderGuide() {
+    $('grid').innerHTML = channels.map((c, r) => {
+      const n = Math.min(6, c.items.length);
+      let cells = '';
+      for (let k = 0; k < n; k++) {
+        const u = c.items[(c.pos + k) % c.items.length];
+        const now = r === cur && k === 0;
+        cells += `<button class="gc${now ? ' now' : ''}${r === gsel.r && k === gsel.c ? ' sel' : ''}" data-r="${r}" data-c="${k}" style="width:${cellW(u.id)}px" title="${esc(u.title)}">` +
+          `${img(u.id)}<div><div class="t">${esc(u.title)}</div><div class="s">${now ? 'On now · ' : ''}${Reel.flag(u.country)} ${esc(u.channel)}</div></div></button>`;
+      }
+      return `<div class="grow${r === cur ? ' cur' : ''}"><button class="gch" data-r="${r}" data-c="0"><b>${pad(c.num)}</b><span>${esc(c.name)}</span><small>${c.items.length} clips</small></button>${cells}</div>`;
+    }).join('');
+  }
+  function guideSel(r, c) {
+    const n = channels.length;
+    r = ((r % n) + n) % n;
+    c = Math.max(0, Math.min(Math.min(6, channels[r].items.length) - 1, c));
+    gsel = { r, c };
+    const old = $('grid').querySelector('.gc.sel');
+    if (old) old.classList.remove('sel');
+    const el = $('grid').querySelector(`.gc[data-r="${r}"][data-c="${c}"]`);
+    if (el) { el.classList.add('sel'); el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); if (c === 0) $('grid').scrollLeft = 0; }
+  }
+  function guide(open) {
+    const g = $('guide');
+    if (open == null) open = !g.classList.contains('open');
+    g.classList.toggle('open', open);
+    if (open) { gsel = { r: cur, c: 0 }; renderGuide(); guideSel(cur, 0); sheet(false); }
+    wake();
+  }
+  const guideOpen = () => $('guide').classList.contains('open');
+  function guidePick(r, c) { guide(false); tune(r, channels[r].pos + c); }
+
+  function sheet(open) {
+    const s = $('sheet');
+    if (open == null) open = !s.classList.contains('open');
+    s.classList.toggle('open', open);
+    if (open) { renderSheet(); const on = s.querySelector('.on'); if (on) on.scrollIntoView({ block: 'center' }); }
+  }
+
+  // ---------- idle ----------
+  function wake() {
+    document.body.classList.remove('idle');
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      if (guideOpen() || $('sheet').classList.contains('open')) return wake();
+      document.body.classList.add('idle');
+    }, 4000);
+  }
+
+  function fullscreen() {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else { const r = document.documentElement.requestFullscreen(); if (r && r.catch) r.catch(() => osd('Fullscreen is not available here.')); }
+    } catch (e) { osd('Fullscreen is not available here.'); }
+  }
+
+  function act(a) {
+    if (!channels.length) return;
+    if (a === 'chup') tune(cur + 1);
+    else if (a === 'chdown') tune(cur - 1);
+    else if (a === 'next') step(1);
+    else if (a === 'prev') step(-1);
+    else if (a === 'mute') setMuted(!muted);
+    else if (a === 'guide') guide();
+    else if (a === 'sheet') sheet();
+    else if (a === 'full') fullscreen();
+    else if (a === 'last') { if (lastCh >= 0 && lastCh !== cur) tune(lastCh); else osd('No last channel yet.'); }
+  }
+
+  function digit(d) {
+    digits += d;
+    clearTimeout(digitTimer);
+    const go = () => { const n = +digits; digits = ''; if (n >= 1 && n <= channels.length) tune(n - 1); else osd('No channel ' + n + '.'); };
+    if (digits.length >= 2 || channels.length < 10) return go();
+    osd(`<div class="big">${digits}–</div>`, 1300);
+    digitTimer = setTimeout(go, 1200);
+  }
+
+  // ---------- events ----------
+  document.addEventListener('click', e => {
+    const t = e.target;
+    let b;
+    if ((b = t.closest('[data-act]'))) { act(b.dataset.act); b.blur(); }
+    else if ((b = t.closest('[data-skip]'))) step(+b.dataset.skip);
+    else if ((b = t.closest('.sch'))) { sheet(false); tune(+b.dataset.ch); }
+    else if ((b = t.closest('#grid [data-r]'))) guidePick(+b.dataset.r, +b.dataset.c);
+    else if (t.id === 'sound') setMuted(false);
+    else if ($('sheet').classList.contains('open') && !t.closest('#sheet')) sheet(false);
+  });
+  ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, firstTouch, true));
+  ['mousemove', 'pointerdown', 'keydown', 'touchstart', 'wheel'].forEach(ev => document.addEventListener(ev, wake, { passive: true }));
+
+  document.addEventListener('keydown', e => {
+    if (e.metaKey || e.ctrlKey || e.altKey || !channels.length) return;
+    const k = e.key;
+    if (guideOpen()) {
+      if (k === 'ArrowUp') guideSel(gsel.r - 1, gsel.c);
+      else if (k === 'ArrowDown') guideSel(gsel.r + 1, gsel.c);
+      else if (k === 'ArrowLeft') guideSel(gsel.r, gsel.c - 1);
+      else if (k === 'ArrowRight') guideSel(gsel.r, gsel.c + 1);
+      else if (k === 'Enter') guidePick(gsel.r, gsel.c);
+      else if (k === 'Escape' || k === 'g' || k === 'G') guide(false);
+      else return;
+      e.preventDefault(); return;
+    }
+    if (k === 'ArrowUp') act('chup');
+    else if (k === 'ArrowDown') act('chdown');
+    else if (k === 'ArrowRight') act('next');
+    else if (k === 'ArrowLeft') act('prev');
+    else if (k === 'm' || k === 'M') act('mute');
+    else if (k === 'g' || k === 'G') act('guide');
+    else if (k === 'f' || k === 'F') act('full');
+    else if (k === 'l' || k === 'L' || k === 'Backspace') act('last');
+    else if (k === '+' || k === '=') volume(10);
+    else if (k === '-' || k === '_') volume(-10);
+    else if (k === 'Escape') sheet(false);
+    else if (/^[0-9]$/.test(k)) digit(k);
+    else return;
+    e.preventDefault();
+  });
+
+  // Phone: swipe left/right changes channel, swipe up opens the channel list
+  let ts = null;
+  document.addEventListener('touchstart', e => {
+    if (!phone.matches || guideOpen() || e.target.closest('#slist')) { ts = null; return; }
+    const t = e.touches[0]; ts = { x: t.clientX, y: t.clientY };
+  }, { passive: true });
+  document.addEventListener('touchend', e => {
+    if (!ts) return;
+    const t = e.changedTouches[0], dx = t.clientX - ts.x, dy = t.clientY - ts.y;
+    ts = null;
+    const open = $('sheet').classList.contains('open');
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.3) { if (!open) act(dx < 0 ? 'chup' : 'chdown'); }
+    else if (dy < -60 && !open) sheet(true);
+    else if (dy > 60 && open) sheet(false);
+  }, { passive: true });
+
+  window.addEventListener('resize', () => { if (allItems) renderTicker(allItems); });
+
+  // ---------- start ----------
+  let allItems = null;
+  tick(); setInterval(tick, 5000);
+  Reel.load({ actionOnly: false }).then(items => {
+    if (!items || !items.length) { $('msg').textContent = 'The feed is empty.'; return; }
+    allItems = items;
+    build(items);
+    if (!channels.length) { $('msg').textContent = 'The feed has too few clips for a channel.'; return; }
+    const i = channels.findIndex(c => c.name === state.ch);
+    cur = i >= 0 ? i : 0;
+    lastCh = channels.findIndex(c => c.name === state.last);
+    renderSheet(); renderTicker(items);
+    $('sound').hidden = false;
+    $('sound').textContent = '🔊 Turn sound on';
+    play(); wake();
+  }).catch(() => { $('msg').textContent = 'The feed did not load. Check the server on port 8522.'; });
+
+  window.__tv = { get channels() { return channels; }, get cur() { return cur; }, get player() { return player; }, get muted() { return muted; } };
+})();
+</script>
+</body>
+</html>

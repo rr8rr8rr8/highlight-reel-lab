@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Versus</title>
+<link rel="stylesheet" href="lib.css">
+<style>
+  body { padding: 52px 16px 40px; overflow-x: hidden; }
+  .wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 28px; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 1040px) { .wrap { grid-template-columns: minmax(0, 1fr) 380px; align-items: start; } }
+  main { min-width: 0; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 12px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
+  .seg { display: inline-flex; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+  .seg button { background: none; border-radius: 999px; padding: 6px 14px; font-size: 13px; color: var(--muted); }
+  .seg button.on { background: var(--fg); color: #000; font-weight: 700; }
+  .stats { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 5px 10px; font-size: 11px; color: var(--muted); }
+  .stat b { color: var(--fg); font-size: 15px; margin-left: 6px; font-variant-numeric: tabular-nums; }
+  .stats .sp { flex: 1; }
+  .ghost { background: var(--chip); border-radius: 999px; padding: 7px 13px; font-size: 13px; }
+  .ghost:hover { background: rgba(255,255,255,.2); }
+  .bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; min-height: 32px; }
+  .bar .pill { background: var(--chip); color: var(--fg); }
+  .bar .pill.on { background: var(--fg); color: #000; }
+  .bar .pill small { opacity: .55; margin-left: 4px; font-weight: 400; }
+  .bar .round { font-weight: 700; font-size: 15px; }
+  .bar .round span { color: var(--muted); font-weight: 400; margin-left: 8px; }
+  [hidden] { display: none !important; }
+
+  .arena { display: grid; grid-template-columns: 1fr auto 1fr; gap: 14px; align-items: start; }
+  .side { min-width: 0; display: flex; flex-direction: column; align-items: center; }
+  .side .frame { width: min(100%, max(170px, calc((100vh - 350px) * 9 / 16))); border: 2px solid transparent; cursor: pointer;
+    transition: border-color .15s, opacity .25s; }
+  .side .frame:hover { border-color: rgba(255,255,255,.5); }
+  .side.win .frame { border-color: var(--good); animation: pop .5s ease; box-shadow: 0 0 0 4px rgba(43,213,118,.18); }
+  .side.lose .frame { opacity: .22; }
+  @keyframes pop { 0% { transform: scale(1); } 35% { transform: scale(1.035); } 100% { transform: scale(1); } }
+  .frame .delta { position: absolute; z-index: 3; top: 12px; right: 12px; background: var(--good); color: #000; font-weight: 800; border-radius: 999px;
+    padding: 4px 10px; font-size: 15px; opacity: 0; transform: translateY(6px); transition: opacity .15s, transform .25s; pointer-events: none; font-variant-numeric: tabular-nums; }
+  .side.win .delta, .side.lose .delta { opacity: 1; transform: none; }
+  .side.lose .delta { background: var(--accent); color: #fff; }
+  .frame .held { position: absolute; z-index: 3; top: 12px; left: 12px; background: rgba(0,0,0,.7); border-radius: 999px; padding: 4px 10px; font-size: 12px; pointer-events: none; }
+  .frame .held:empty { display: none; }
+  .frame .snd { position: absolute; z-index: 3; bottom: 10px; left: 10px; background: rgba(0,0,0,.65); border-radius: 999px; padding: 4px 10px; font-size: 11px;
+    color: var(--muted); pointer-events: none; }
+  .frame .snd.on { background: var(--fg); color: #000; font-weight: 700; }
+  .meta { width: 100%; max-width: 340px; padding: 10px 2px 0; }
+  .meta .where { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meta .title { font-weight: 600; font-size: 14px; margin: 3px 0 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.8em; }
+  .meta .rt { font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; margin-bottom: 8px; }
+  .pick { display: block; width: 100%; background: var(--fg); color: #000; font-weight: 800; border-radius: 12px; padding: 12px 14px; font-size: 15px; transition: transform .1s; }
+  .pick:active { transform: scale(.97); }
+  .pick kbd { font: inherit; font-weight: 400; opacity: .45; margin-left: 6px; }
+  .vs { color: var(--dim); font-weight: 800; font-size: 13px; letter-spacing: .1em; align-self: center; }
+  .dots { display: none; justify-content: center; gap: 6px; margin-top: 10px; }
+  .dots i { width: 22px; height: 4px; border-radius: 2px; background: var(--line); }
+  .dots i.on { background: var(--fg); }
+  .hint { color: var(--dim); font-size: 12px; margin-top: 14px; }
+  .note { color: var(--muted); font-size: 14px; padding: 30px 0; }
+
+  .bracket { margin-top: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: grid; gap: 8px; }
+  .bracket .rw { display: grid; gap: 4px; }
+  .bracket .rw.r0 { grid-template-columns: repeat(8, 1fr); } .bracket .rw.r1 { grid-template-columns: repeat(4, 1fr); }
+  .bracket .rw.r2 { grid-template-columns: repeat(2, 1fr); } .bracket .rw.r3 { grid-template-columns: 1fr; }
+  .bracket .lab { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+  .bracket .m { display: flex; justify-content: center; gap: 2px; padding: 3px; border-radius: 8px; border: 1px solid transparent; }
+  .bracket .m.now { border-color: var(--fg); }
+  .bracket .m > * { width: min(50%, 34px); aspect-ratio: 1; border-radius: 5px; background: #222 center / cover; padding: 0; display: block; }
+  .bracket .m .w { box-shadow: 0 0 0 2px var(--good); }
+  .bracket .m .l { opacity: .28; }
+
+  .champ { display: grid; gap: 20px; grid-template-columns: minmax(0, auto) minmax(0, 1fr); align-items: center; }
+  .champ .frame { width: min(100%, max(190px, calc((100vh - 330px) * 9 / 16))); border: 2px solid var(--good); }
+  .champ .kick { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--good); font-weight: 700; }
+  .champ h2 { font-size: 22px; line-height: 1.2; margin: 8px 0; }
+  .champ .where { color: var(--muted); margin-bottom: 6px; }
+  .champ .path { color: var(--dim); font-size: 13px; margin-bottom: 16px; }
+  .champ .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+  .champ .share { margin-top: 14px; font-size: 12px; color: var(--dim); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; word-break: break-word; }
+
+  @media (max-width: 620px) {
+    body { padding-top: 48px; }
+    h1 { font-size: 19px; padding-left: 64px; line-height: 28px; margin-top: -40px; }
+    header { justify-content: space-between; }
+    .arena { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 10px; margin: 0 -16px; padding: 0 16px; scrollbar-width: none; }
+    .arena::-webkit-scrollbar { display: none; }
+    .vs { display: none; }
+    .side { flex: none; width: max(190px, min(74vw, calc((100dvh - 330px) * 9 / 16))); scroll-snap-align: center; }
+    .side .frame { width: 100%; }
+    .meta { max-width: none; }
+    .meta .title { min-height: 0; -webkit-line-clamp: 1; }
+    .pick { padding: 16px; font-size: 17px; border-radius: 14px; }
+    .pick kbd, .hint { display: none; }
+    .dots { display: flex; }
+    .champ { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+    .champ .frame { width: min(70vw, calc((100dvh - 380px) * 9 / 16)); }
+    .champ .acts { justify-content: center; }
+  }
+
+  aside { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; min-width: 0; }
+  aside .top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  aside h2 { font-size: 15px; margin: 0; }
+  aside .sub { color: var(--dim); font-size: 12px; margin: 6px 0 10px; }
+  ol { list-style: none; margin: 0; padding: 0; }
+  li { display: grid; grid-template-columns: 20px 40px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 7px 4px; border-top: 1px solid var(--line); cursor: pointer; border-radius: 6px; }
+  li:hover, li:focus-visible { background: rgba(255,255,255,.06); outline: 0; }
+  li .n { color: var(--dim); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+  li:nth-child(-n+3) .n { color: var(--fg); font-weight: 700; }
+  li img { width: 40px; height: 54px; object-fit: cover; border-radius: 6px; background: #222; display: block; }
+  li .t { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  li .c { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  li .r { text-align: right; font-variant-numeric: tabular-nums; }
+  li .r b { display: block; font-size: 15px; }
+  li .r span { font-size: 11px; color: var(--muted); }
+  li.live .t { color: var(--good); }
+  .empty { color: var(--dim); font-size: 13px; padding: 14px 0 4px; border-top: 1px solid var(--line); }
+
+  .modal { position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,.78); display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 14px; width: min(100%, 360px); max-height: 100%; }
+  .sheet .frame { width: min(100%, calc((100dvh - 250px) * 9 / 16)); margin: 0 auto; cursor: pointer; }
+  .sheet .mt { font-weight: 600; margin: 10px 0 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .sheet .mw { font-size: 12px; color: var(--muted); }
+  .sheet .mr { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  @media (max-width: 620px) { .modal { align-items: flex-end; padding: 0; } .sheet { width: 100%; border-radius: 18px 18px 0 0; padding-bottom: 22px; } }
+</style>
+</head>
+<body>
+<a class="back" href="index.html">← Lab</a>
+<div class="wrap">
+  <main>
+    <header>
+      <h1>Goal of the Day</h1>
+      <div class="seg" id="modes"><button data-mode="endless" class="on">Endless</button><button data-mode="cup">Today's Cup</button></div>
+    </header>
+    <div class="stats">
+      <div class="stat">Your votes<b id="sMine">0</b></div>
+      <div class="stat">All votes<b id="sAll">–</b></div>
+      <div class="stat">Run<b id="sRun">0</b></div>
+      <div class="stat">Best run<b id="sBest">0</b></div>
+      <span class="sp"></span>
+      <button class="ghost" id="sound">Sound off</button>
+    </div>
+    <div class="bar" id="bar"></div>
+    <div id="note" class="note" hidden></div>
+    <div class="arena" id="arena">
+      <div class="side" data-i="0">
+        <div class="frame"><div class="yt" style="position:absolute;inset:0"></div><span class="held"></span><span class="delta"></span><span class="snd"></span></div>
+        <div class="meta"><div class="where"></div><div class="title">Loading clips.</div><div class="rt"></div>
+          <button class="pick" data-i="0">Pick this one<kbd>←</kbd></button></div>
+      </div>
+      <div class="vs">VS</div>
+      <div class="side" data-i="1">
+        <div class="frame"><div class="yt" style="position:absolute;inset:0"></div><span class="held"></span><span class="delta"></span><span class="snd"></span></div>
+        <div class="meta"><div class="where"></div><div class="title">&nbsp;</div><div class="rt"></div>
+          <button class="pick" data-i="1">Pick this one<kbd>→</kbd></button></div>
+      </div>
+    </div>
+    <div class="dots" id="dots"><i class="on"></i><i></i></div>
+    <section class="champ" id="champ" hidden>
+      <div class="frame"><div class="yt" style="position:absolute;inset:0"></div></div>
+      <div>
+        <div class="kick">Your goal of the day</div>
+        <h2 id="cTitle"></h2>
+        <div class="where" id="cWhere"></div>
+        <div class="path" id="cPath"></div>
+        <div class="acts"><button class="btn" id="copy">Copy result</button><button class="ghost" id="toEndless">Play Endless</button><button class="ghost" id="recup">Replay the cup</button></div>
+        <div class="share" id="cShare"></div>
+      </div>
+    </section>
+    <div class="bracket" id="bracket" hidden></div>
+    <div class="hint" id="hint">← and → vote. ↓ skips the pair. S turns sound on or off. Click a clip to hear it.</div>
+  </main>
+  <aside>
+    <div class="top"><h2>Ranking</h2>
+      <div class="seg" id="tabs"><button data-tab="today" class="on">Today</button><button data-tab="all">All time</button></div></div>
+    <div class="sub" id="bSub">Loading the ranking.</div>
+    <ol id="board"></ol>
+  </aside>
+</div>
+<div class="modal" id="modal" hidden>
+  <div class="sheet">
+    <div class="frame"><div class="yt" style="position:absolute;inset:0"></div></div>
+    <div class="mt" id="mTitle"></div><div class="mw" id="mWhere"></div>
+    <div class="mr"><span id="mRate"></span><button class="btn" id="mClose">Close</button></div>
+  </div>
+</div>
+<script src="lib.js"></script>
+<script>
+(function () {
+  const KEY = 'reel.versus.v2', CUPKEY = 'reel.versus.cup.v1', K = 32, START = 1500, MAX_DEFENCES = 5, H48 = 48 * 3600e3;
+  const $ = id => document.getElementById(id);
+  const sides = [...document.querySelectorAll('.side')];
+  const arena = $('arena');
+  const phone = window.matchMedia('(max-width: 620px)');
+
+  // ---- storage: this browser's own ratings (fallback), vote count, prefs, unsent votes
+  let store = { r: {}, mine: 0, sound: false, mode: 'endless', tab: 'today', queue: [] };
+  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.r) store = Object.assign(store, s); } catch (e) {}
+  if (!Array.isArray(store.queue)) store.queue = [];
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} };
+
+  // ---- shared ranking
+  const shared = new Map();           // id -> { id, r, w, l, title, channel, country, published }
+  let online = null, everOnline = false, tries = 0, totalVotes = 0, refreshT = 0, retryT = 0;
+  // No endpoint at all (static export): give up after three tries and run on this browser's ratings only.
+  const retry = () => { clearTimeout(retryT); if (everOnline || tries < 3) retryT = setTimeout(refresh, 30000); };
+  let pool = [], byId = new Map();
+  const info = id => (online ? shared.get(id) : store.r[id]) || null;
+  const rating = id => { const v = info(id); return v ? v.r : START; };
+  const games = id => { const v = info(id); return v ? v.w + v.l : 0; };
+  const elo = (W, L) => { const d = K * (1 - 1 / (1 + Math.pow(10, (L.r - W.r) / 400))); W.r += d; L.r -= d; W.w++; L.l++; return d; };
+  const localRec = id => store.r[id] || (store.r[id] = { r: START, w: 0, l: 0 });
+  const sharedRec = it => { let v = shared.get(it.id);
+    if (!v) { v = { id: it.id, r: START, w: 0, l: 0, title: it.title, channel: it.channel, country: it.country, published: it.published }; shared.set(it.id, v); }
+    return v; };
+
+  async function refresh() {
+    try {
+      const res = await fetch('ranking.json?limit=500');
+      if (!res.ok) throw 0;
+      const d = await res.json();
+      shared.clear();
+      (d.items || []).forEach(v => shared.set(v.id, v));
+      totalVotes = d.votes || 0; online = everOnline = true;
+      flush();
+    } catch (e) { online = false; tries++; retry(); }
+    paintAll();
+  }
+  async function send(w, l) {
+    const res = await fetch('/api/vote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ winner: w, loser: l }) });
+    if (!res.ok) throw 0;
+    const d = await res.json();
+    [d.winner, d.loser].forEach(x => { if (x && x.id) { const it = byId.get(x.id) || { id: x.id }; Object.assign(sharedRec(it), { r: x.r, w: x.w, l: x.l }); } });
+  }
+  function post(w, l) {
+    if (!everOnline) return;
+    send(w, l).then(() => { online = true; clearTimeout(refreshT); refreshT = setTimeout(refresh, 400); })
+      .catch(() => { online = false; store.queue.push([w, l]); if (store.queue.length > 200) store.queue.shift(); save();
+        retry(); paintAll(); });
+  }
+  let flushing = false;
+  async function flush() {
+    if (flushing || !store.queue.length) return;
+    flushing = true;
+    try { while (store.queue.length) { await send(store.queue[0][0], store.queue[0][1]); store.queue.shift(); save(); } clearTimeout(refreshT); refreshT = setTimeout(refresh, 400); }
+    catch (e) {}
+    flushing = false;
+  }
+
+  // ---- categories from title keywords
+  const wordRe = words => new RegExp('(^|[^a-zà-ÿ])(' + words + ')([^a-zà-ÿ]|$)', 'i');
+  const SAVE = wordRe('saves?|saved|parada|paradas|paradón|atajada|atajadón|defesa|keeper|goalkeeper|portero|arquero|parade|denied|kurtarış');
+  const SKILL = wordRe('skills?|nutmegs?|dribbl\\w*|caño|tunnel|rabona|tricks?|assists?|regate|drible|first touch|control');
+  const GOAL = wordRe('goals?|gols?|goles|golazo|golaço|golos?|tore?|scores?|scored|finish|strike|volley|header|free.?kick|penalty|penalti|hat.?trick|brace|screamer|winner|equali[sz]er');
+  const cat = t => SAVE.test(t) ? 'saves' : SKILL.test(t) ? 'skills' : (GOAL.test(t) || /هدف|гол/i.test(t)) ? 'goals' : 'other';
+  const CATS = [['all', 'All'], ['goals', 'Goals'], ['saves', 'Saves'], ['skills', 'Skills']];
+  let filter = 'all';
+  const catPool = () => filter === 'all' ? pool : pool.filter(v => v.cat === filter);
+
+  // ---- arena state
+  const slots = [{ item: null, p: null, gen: 0 }, { item: null, p: null, gen: 0 }];
+  const bad = new Set(), pairs = new Set(), shown = new Map();
+  let mode = store.mode === 'cup' ? 'cup' : 'endless', tab = store.tab === 'all' ? 'all' : 'today';
+  let run = 0, best = 0, champ = -1, locked = true, interacted = false, soundSide = 0, nextUp = null, sessionVotes = 0;
+  let cup = null, winP = null, winGen = 0, modalP = null, modalGen = 0, modalOpen = false;
+  const chan = v => v.channelId || v.channel;
+  const pk = (a, b) => a < b ? a + '|' + b : b + '|' + a;
+  const preload = id => { const im = new Image(); im.src = Reel.tall(id); };
+  const bg = id => 'url(' + Reel.tall(id) + '), url(' + Reel.thumb(id) + ')';
+
+  // Opponent choice: few votes first, close ratings once both have some, new channel, never a pair already seen this session.
+  function choose(anchor, exclude) {
+    const base = catPool().filter(v => !bad.has(v.id) && !exclude.has(v.id) && !anchor.some(a => pairs.has(pk(a.id, v.id))));
+    const chans = new Set(anchor.map(chan));
+    let c = base.filter(v => !chans.has(chan(v)));
+    if (!c.length) c = base;
+    if (!c.length) return null;
+    const a = anchor[0], ag = a ? games(a.id) : 0;
+    let bestV = null, bestCost = Infinity;
+    for (let n = 0; n < Math.min(40, c.length); n++) {
+      const v = c[Math.floor(Math.random() * c.length)], g = games(v.id);
+      let cost = Math.min(g, 12) + (shown.get(v.id) || 0) * 4 + Math.random() * 1.5;
+      if (a && g >= 2 && ag >= 2) cost += Math.abs(rating(v.id) - rating(a.id)) / 40;
+      else if (a && ag >= 2 && g < 2) cost += Math.abs(rating(a.id) - START) / 80;
+      if (cost < bestCost) { bestCost = cost; bestV = v; }
+    }
+    return bestV;
+  }
+  const liveIds = () => new Set(slots.map(s => s.item && s.item.id).filter(Boolean));
+  function planNext() {
+    const a = slots.map(s => s.item).filter(Boolean);
+    nextUp = mode === 'endless' && a.length === 2 ? choose(a, liveIds()) : null;
+    if (nextUp) preload(nextUp.id);
+  }
+
+  function kill(s) { s.gen++; const p = s.p; s.p = null; if (p) { try { p.destroy(); } catch (e) {} } }
+
+  function mount(i, item) {
+    const s = slots[i], el = sides[i];
+    kill(s);
+    s.item = item;
+    const yt = el.querySelector('.yt');
+    yt.innerHTML = '';
+    if (!item) return;
+    shown.set(item.id, (shown.get(item.id) || 0) + 1);
+    const gen = s.gen;
+    el.querySelector('.frame').style.backgroundImage = bg(item.id);
+    paintMeta(i);
+    if (modalOpen && i === 1) return;                       // the preview sheet is using this player slot
+    Reel.player(yt, item.id, { loop: true, onError: () => { if (slots[i].gen === gen) broken(i, item); } }).then(p => {
+      if (slots[i].gen !== gen) { try { p.destroy(); } catch (e) {} return; }
+      s.p = p;
+      if (modalOpen) { try { p.pauseVideo(); } catch (e) {} }
+      applySound();
+    }).catch(() => {});
+  }
+
+  function broken(i, item) {
+    bad.add(item.id);
+    if (mode === 'cup') return cupSub(item.id);
+    if (champ === i) { champ = -1; run = 0; }
+    const other = slots[1 - i].item;
+    const it = choose(other ? [other] : [], liveIds());
+    if (!it) return exhausted();
+    mount(i, it); if (other) pairs.add(pk(other.id, it.id));
+    planNext(); paintAll();
+  }
+
+  function paintMeta(i) {
+    const it = slots[i].item, el = sides[i];
+    if (!it) return;
+    const v = info(it.id);
+    el.querySelector('.where').textContent = Reel.flag(it.country) + ' ' + it.country + ' · ' + it.channel;
+    el.querySelector('.title').textContent = it.title;
+    el.querySelector('.rt').textContent = v && v.w + v.l ? Math.round(v.r) + ' · ' + v.w + '–' + v.l : 'Unrated';
+    el.querySelector('.held').textContent = mode === 'endless' && champ === i && run > 0 ? 'Won ' + run + ' in a row' : '';
+  }
+  function paintSound() {
+    const on = interacted && store.sound;
+    sides.forEach((el, i) => { const b = el.querySelector('.snd'); const me = on && soundSide === i;
+      b.textContent = me ? 'Sound on' : 'Tap for sound'; b.classList.toggle('on', me); });
+    $('sound').textContent = store.sound ? 'Sound on' : 'Sound off';
+    [...$('dots').children].forEach((d, i) => d.classList.toggle('on', i === visibleSide()));
+  }
+  function applySound() {
+    const on = interacted && store.sound;
+    slots.forEach((s, j) => { if (!s.p) return;
+      try { if (on && !modalOpen && j === soundSide) { s.p.unMute(); s.p.setVolume(100); } else s.p.mute(); } catch (e) {} });
+    [[winP, !modalOpen], [modalP, true]].forEach(([p, ok]) => { if (!p) return;
+      try { if (on && ok) { p.unMute(); p.setVolume(100); } else p.mute(); } catch (e) {} });
+    paintSound();
+  }
+  function setSound(on, side) { store.sound = on; if (side != null) soundSide = side; save(); applySound(); }
+
+  function paintStats() {
+    $('sMine').textContent = store.mine;
+    $('sAll').textContent = online ? totalVotes : '–';
+    $('sAll').parentNode.hidden = online === false && !everOnline;
+    $('sRun').textContent = run; $('sBest').textContent = best;
+  }
+
+  function boardRows() {
+    let rows;
+    if (online) rows = [...shared.values()].map(v => Object.assign({}, byId.get(v.id) || {}, v));
+    else rows = Object.entries(store.r).map(([id, v]) => Object.assign({ id }, byId.get(id) || {}, v));
+    rows = rows.filter(v => v.w + v.l > 0 && (v.title || byId.has(v.id)));
+    if (tab === 'today') { const cut = Date.now() - H48; rows = rows.filter(v => v.published && Date.parse(v.published) >= cut); }
+    return rows.sort((a, b) => b.r - a.r || b.w - a.w).slice(0, 25);
+  }
+  function paintBoard() {
+    const live = liveIds(), top = boardRows();
+    $('bSub').textContent = online === null ? 'Loading the ranking.'
+      : online ? 'Top 25 from everyone\'s votes' + (tab === 'today' ? ', clips from the last 48 hours.' : '.')
+      : 'Top 25 from your votes in this browser' + (tab === 'today' ? ', clips from the last 48 hours.' : '.') + (everOnline && store.queue.length ? ' ' + store.queue.length + ' waiting to send.' : '');
+    $('board').innerHTML = top.length ? top.map((v, n) =>
+      '<li tabindex="0" data-id="' + Reel.esc(v.id) + '" class="' + (live.has(v.id) ? 'live' : '') + '"><span class="n">' + (n + 1) + '</span>' +
+      '<img src="' + Reel.tall(v.id) + '" alt="" loading="lazy" onerror="this.onerror=null;this.src=\'' + Reel.thumb(v.id) + '\'">' +
+      '<div style="min-width:0"><div class="t">' + Reel.esc(v.title || '') + '</div><div class="c">' + Reel.flag(v.country) + ' ' + Reel.esc(v.country || '') + ' · ' + Reel.esc(v.channel || '') + '</div></div>' +
+      '<div class="r"><b>' + Math.round(v.r) + '</b><span>' + v.w + '–' + v.l + '</span></div></li>').join('')
+      : '<div class="empty">' + (tab === 'today' ? 'No votes on recent clips yet.' : 'No votes yet.') + '</div>';
+  }
+  function paintAll() { paintMeta(0); paintMeta(1); paintStats(); paintBoard(); }
+
+  // ---- voting (both modes)
+  function vote(w) {
+    if (locked || modalOpen || !slots[0].item || !slots[1].item) return;
+    locked = true;
+    const l = 1 - w, wi = slots[w].item, li = slots[l].item;
+    let d = elo(localRec(wi.id), localRec(li.id));
+    if (online) { d = elo(sharedRec(wi), sharedRec(li)); totalVotes++; }      // optimistic; the server reply overwrites it
+    store.mine++; sessionVotes++; save();
+    pairs.add(pk(wi.id, li.id));
+    post(wi.id, li.id);
+    if (mode === 'endless') { run = champ === w ? run + 1 : 1; champ = w; best = Math.max(best, run); }
+    const dr = Math.max(1, Math.round(d));
+    sides[w].querySelector('.delta').textContent = '+' + dr;
+    sides[l].querySelector('.delta').textContent = '−' + dr;
+    sides[w].classList.add('win'); sides[l].classList.add('lose');
+    if (mode === 'cup') { cup.w.push(wi.id); saveCup(); paintBracket(); const nx = cupPair(cup.w.length); if (nx) nx.forEach(id => id && preload(id)); }
+    paintAll();
+    setTimeout(() => {
+      sides[w].classList.remove('win'); sides[l].classList.remove('lose');
+      if (mode === 'cup') { locked = false; return cupStep(); }
+      let keep = wi;
+      if (run >= MAX_DEFENCES) {                                               // champion retires after five wins
+        champ = -1; run = 0;
+        keep = choose([], liveIds()); if (!keep) return exhausted();
+        mount(w, keep);
+      }
+      let opp = nextUp && keep === wi && !bad.has(nextUp.id) && !pairs.has(pk(keep.id, nextUp.id)) ? nextUp : choose([keep], liveIds());
+      if (!opp) return exhausted();
+      mount(l, opp);
+      focusSide(keep === wi ? l : 0);
+      planNext(); paintAll();
+      locked = false;
+    }, 560);
+  }
+
+  function freshPair() {
+    kill(slots[0]); kill(slots[1]); slots[0].item = slots[1].item = null;
+    champ = -1; run = 0;
+    const a = choose([], new Set()); const b = a && choose([a], new Set([a.id]));
+    if (!a || !b) return exhausted();
+    showArena(true);
+    mount(0, a); mount(1, b);
+    focusSide(0); planNext(); paintAll();
+    locked = false;
+  }
+  function skip() {
+    if (locked || modalOpen || mode !== 'endless') return;
+    if (slots[0].item && slots[1].item) pairs.add(pk(slots[0].item.id, slots[1].item.id));
+    freshPair();
+  }
+  function exhausted() {
+    kill(slots[0]); kill(slots[1]); slots[0].item = slots[1].item = null;
+    locked = true; showArena(false);
+    $('note').hidden = false;
+    $('note').textContent = filter === 'all' ? 'You have seen every match-up for now.' : 'No new match-ups left in this category. Choose another.';
+    paintAll();
+  }
+  function showArena(on) {
+    arena.hidden = !on; $('dots').hidden = !on; $('note').hidden = true;
+    if (on) $('champ').hidden = true;
+  }
+
+  // ---- phone: swipeable A/B
+  const visibleSide = () => phone.matches && arena.scrollWidth > arena.clientWidth + 4
+    ? (arena.scrollLeft > (arena.scrollWidth - arena.clientWidth) / 2 ? 1 : 0) : soundSide;
+  function focusSide(i) {
+    if (!phone.matches) return;
+    arena.scrollTo({ left: i ? arena.scrollWidth : 0, behavior: 'smooth' });
+  }
+  let scT = 0;
+  arena.addEventListener('scroll', () => { clearTimeout(scT); scT = setTimeout(() => {
+    if (!phone.matches) return;
+    const v = visibleSide(); if (v !== soundSide) { soundSide = v; applySound(); } else paintSound();
+  }, 90); });
+
+  // ---- Today's Cup
+  const today = () => new Date().toISOString().slice(0, 10);
+  const hash = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+  const rng = seed => () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const saveCup = () => { try { localStorage.setItem(CUPKEY, JSON.stringify(cup)); } catch (e) {} };
+  const ROUNDS = [['Round of 16', 0, 8], ['Quarter-finals', 8, 4], ['Semi-finals', 12, 2], ['Final', 14, 1]];
+  const cupPair = m => m > 14 ? null : m < 8 ? [cup.ids[2 * m], cup.ids[2 * m + 1]] : [cup.w[2 * (m - 8)], cup.w[2 * (m - 8) + 1]];
+
+  function buildCup(force) {
+    const day = today();
+    if (!force) { try { const c = JSON.parse(localStorage.getItem(CUPKEY));
+      if (c && c.date === day && Array.isArray(c.ids) && c.ids.length === 16 && Array.isArray(c.w) && c.w.length <= 15) { c.subs = c.subs || []; return c; } } catch (e) {} }
+    // The draw depends only on the date and the feed: clips published in the 48 hours before today began (UTC),
+    // best-rated first, then most recent, one per channel. Seeded shuffle sets the bracket order.
+    const start = Date.parse(day + 'T00:00:00Z'), t = v => Date.parse(v.published) || 0;
+    let cand = pool.filter(v => t(v) < start && t(v) >= start - H48);
+    if (cand.length < 24) cand = pool.filter(v => t(v) < start).slice(0, 80);
+    if (cand.length < 24) cand = pool.slice(0, 80);
+    const sc = v => { const s = shared.get(v.id); return s && s.w + s.l > 0 ? s.r : START; };
+    cand = cand.slice().sort((a, b) => sc(b) - sc(a) || t(b) - t(a) || (a.id < b.id ? -1 : 1));
+    const seenCh = new Set(), first = [], rest = [];
+    cand.forEach(v => { if (seenCh.has(chan(v))) rest.push(v); else { seenCh.add(chan(v)); first.push(v); } });
+    const order = first.concat(rest), ids = order.slice(0, 16).map(v => v.id), subs = order.slice(16, 28).map(v => v.id);
+    const r = rng(hash(day));
+    for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
+    const c = { date: day, ids, subs, w: [] };
+    cup = c; saveCup();
+    return c;
+  }
+  function cupSub(id) {                       // a clip that will not embed is swapped for the next reserve
+    let sub; while (cup.subs.length) { const s = cup.subs.shift(); if (byId.has(s) && !bad.has(s) && !cup.ids.includes(s)) { sub = s; break; } }
+    if (sub) { cup.ids = cup.ids.map(x => x === id ? sub : x); cup.w = cup.w.map(x => x === id ? sub : x); saveCup(); paintBracket(); return cupStep(); }
+    const pr = cupPair(cup.w.length); const other = pr && pr.find(x => x !== id);   // no reserves left: walkover
+    if (other) { cup.w.push(other); saveCup(); }
+    paintBracket(); cupStep();
+  }
+  function cupStep() {
+    const m = cup.w.length;
+    paintBar(); paintBracket();
+    if (m >= 15) return cupDone();
+    const pr = cupPair(m), miss = pr.find(id => !byId.has(id) || bad.has(id));
+    if (miss) { bad.add(miss); return cupSub(miss); }
+    killWin(); showArena(true);
+    mount(0, byId.get(pr[0])); mount(1, byId.get(pr[1]));
+    focusSide(0); paintAll();
+    locked = false;
+  }
+  function killWin() { winGen++; const p = winP; winP = null; if (p) { try { p.destroy(); } catch (e) {} } $('champ').querySelector('.yt').innerHTML = ''; }
+  function shareLine() {
+    const it = byId.get(cup.w[14]); if (!it) return '';
+    const d = new Date(cup.date + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+    return 'My goal of the day, ' + d + ': ' + Reel.flag(it.country) + ' ' + it.title + ' (' + it.channel + '). https://youtube.com/shorts/' + it.id;
+  }
+  function cupDone() {
+    kill(slots[0]); kill(slots[1]); slots[0].item = slots[1].item = null;
+    locked = true; arena.hidden = true; $('dots').hidden = true; $('note').hidden = true;
+    const id = cup.w[14], it = byId.get(id);
+    if (!it) { $('note').hidden = false; $('note').textContent = 'Today\'s winner is no longer in the feed.'; return; }
+    const ru = byId.get(cup.w[12] === id ? cup.w[13] : cup.w[12]);
+    $('champ').hidden = false;
+    $('cTitle').textContent = it.title;
+    $('cWhere').textContent = Reel.flag(it.country) + ' ' + it.country + ' · ' + it.channel;
+    $('cPath').textContent = 'It won four rounds' + (ru ? ' and beat ' + ru.channel + ' in the final.' : '.') + ' A new cup starts tomorrow.';
+    $('cShare').textContent = shareLine();
+    const fr = $('champ').querySelector('.frame'); fr.style.backgroundImage = bg(id);
+    killWin(); const gen = winGen;
+    Reel.player(fr.querySelector('.yt'), id, { loop: true }).then(p => {
+      if (gen !== winGen || mode !== 'cup') { try { p.destroy(); } catch (e) {} return; }
+      winP = p; if (modalOpen) { try { p.pauseVideo(); } catch (e) {} } applySound();
+    }).catch(() => {});
+    paintAll();
+  }
+  function paintBracket() {
+    const el = $('bracket'); el.hidden = mode !== 'cup' || !cup;
+    if (el.hidden) return;
+    const cur = cup.w.length;
+    el.innerHTML = ROUNDS.map(([name, from, n], ri) => '<div class="lab">' + name + '</div><div class="rw r' + ri + '">' +
+      Array.from({ length: n }, (_, k) => { const m = from + k, pr = cupPair(m), won = cup.w[m];
+        return '<div class="m' + (m === cur ? ' now' : '') + '">' + [0, 1].map(j => { const id = pr[j];
+          if (!id) return '<span></span>';
+          return '<button data-id="' + Reel.esc(id) + '" class="' + (won ? (won === id ? 'w' : 'l') : '') + '" style="background-image:' + bg(id).replace(/"/g, '') + '" aria-label="Preview clip"></button>';
+        }).join('') + '</div>'; }).join('') + '</div>').join('');
+  }
+
+  // ---- top bar: category chips (Endless) or round progress (Cup)
+  function paintBar() {
+    const bar = $('bar');
+    if (mode === 'cup') {
+      const m = cup ? cup.w.length : 0, r = ROUNDS.find(x => m < x[1] + x[2]);
+      bar.innerHTML = !cup ? '' : r ? '<div class="round">' + r[0] + '<span>' + (r[2] > 1 ? 'Match ' + (m - r[1] + 1) + ' of ' + r[2] : 'One match left') + '</span></div>'
+        : '<div class="round">Cup complete<span>' + cup.date + '</span></div>';
+      return;
+    }
+    const counts = { all: pool.length }; pool.forEach(v => { counts[v.cat] = (counts[v.cat] || 0) + 1; });
+    const chips = CATS.filter(([k]) => k === 'all' || (counts[k] || 0) >= 8);
+    bar.innerHTML = (chips.length > 1 ? chips.map(([k, n]) => '<button class="pill' + (k === filter ? ' on' : '') + '" data-cat="' + k + '">' + n + '<small>' + (counts[k] || 0) + '</small></button>').join('') : '') +
+      '<span style="flex:1"></span><button class="ghost" id="skip">Skip pair</button>';
+  }
+
+  function setMode(m) {
+    mode = m; store.mode = m; save();
+    [...$('modes').children].forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+    killWin(); $('champ').hidden = true;
+    kill(slots[0]); kill(slots[1]); slots[0].item = slots[1].item = null;
+    champ = -1; run = 0; nextUp = null; locked = true;
+    $('hint').textContent = m === 'cup' ? '← and → vote. S turns sound on or off. Click a clip to hear it. Progress is saved for today.'
+      : '← and → vote. ↓ skips the pair. S turns sound on or off. Click a clip to hear it.';
+    if (m === 'cup') { cup = buildCup(false); paintBracket(); cupStep(); }
+    else { $('bracket').hidden = true; paintBar(); freshPair(); }
+  }
+
+  // ---- clip preview sheet. It borrows the second player slot so no more than two players exist.
+  function openModal(id) {
+    const it = Object.assign({}, shared.get(id) || {}, byId.get(id) || {});
+    if (!it.id) it.id = id;
+    closeModal(true);
+    modalOpen = true;
+    kill(slots[1]); sides[1].querySelector('.yt').innerHTML = '';
+    [slots[0].p, winP].forEach(p => { if (p) { try { p.pauseVideo(); } catch (e) {} } });
+    const v = info(id);
+    $('mTitle').textContent = it.title || 'Clip';
+    $('mWhere').textContent = Reel.flag(it.country) + ' ' + (it.country || '') + ' · ' + (it.channel || '');
+    $('mRate').textContent = v && v.w + v.l ? 'Rating ' + Math.round(v.r) + ' · ' + v.w + '–' + v.l : 'Unrated';
+    const fr = $('modal').querySelector('.frame'); fr.style.backgroundImage = bg(id);
+    $('modal').hidden = false;
+    const gen = ++modalGen;
+    Reel.player(fr.querySelector('.yt'), id, { loop: true, onError: () => { if (gen === modalGen) $('mRate').textContent = 'This clip will not play here.'; } }).then(p => {
+      if (gen !== modalGen || !modalOpen) { try { p.destroy(); } catch (e) {} return; }
+      modalP = p; applySound();
+    }).catch(() => {});
+    applySound();
+  }
+  function closeModal(quiet) {
+    modalGen++;
+    const p = modalP; modalP = null; if (p) { try { p.destroy(); } catch (e) {} }
+    $('modal').querySelector('.yt').innerHTML = '';
+    $('modal').hidden = true;
+    if (!modalOpen) return;
+    modalOpen = false;
+    if (quiet) return;
+    [slots[0].p, winP].forEach(q => { if (q) { try { q.playVideo(); } catch (e) {} } });
+    if (!arena.hidden && slots[1].item) mount(1, slots[1].item);
+    applySound();
+  }
+
+  // ---- events
+  const touch = () => { if (!interacted) { interacted = true; setTimeout(applySound, 0); } };
+  document.addEventListener('pointerdown', touch, true);
+  document.addEventListener('keydown', touch, true);
+  sides.forEach((el, i) => {
+    el.querySelector('.pick').addEventListener('click', () => vote(i));
+    el.querySelector('.frame').addEventListener('click', () => { interacted = true; setSound(!(store.sound && soundSide === i), i); });
+    el.addEventListener('mouseenter', () => { if (!phone.matches && store.sound && soundSide !== i) { soundSide = i; applySound(); } });
+  });
+  $('sound').addEventListener('click', () => { interacted = true; setSound(!store.sound, phone.matches ? visibleSide() : soundSide); });
+  document.addEventListener('keydown', e => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === 'Escape') return closeModal();
+    if (modalOpen) return;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); vote(0); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); vote(1); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); skip(); }
+    else if (e.key === 's' || e.key === 'S') setSound(!store.sound);
+    else if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('#board li')) { e.preventDefault(); openModal(e.target.dataset.id); }
+  });
+  $('bar').addEventListener('click', e => {
+    const c = e.target.closest('[data-cat]');
+    if (c) { filter = c.dataset.cat; paintBar(); freshPair(); }
+    else if (e.target.closest('#skip')) skip();
+  });
+  $('modes').addEventListener('click', e => { const b = e.target.closest('[data-mode]'); if (b && b.dataset.mode !== mode && pool.length) setMode(b.dataset.mode); });
+  $('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return;
+    tab = store.tab = b.dataset.tab; save(); [...$('tabs').children].forEach(x => x.classList.toggle('on', x === b)); paintBoard(); });
+  $('board').addEventListener('click', e => { const li = e.target.closest('li[data-id]'); if (li) openModal(li.dataset.id); });
+  $('bracket').addEventListener('click', e => { const b = e.target.closest('[data-id]'); if (b) openModal(b.dataset.id); });
+  $('modal').addEventListener('click', e => { if (e.target === $('modal')) closeModal(); });
+  $('modal').querySelector('.frame').addEventListener('click', () => { interacted = true; setSound(!store.sound); });
+  $('champ').querySelector('.frame').addEventListener('click', () => { interacted = true; setSound(!store.sound); });
+  $('mClose').addEventListener('click', () => closeModal());
+  $('toEndless').addEventListener('click', () => setMode('endless'));
+  $('recup').addEventListener('click', () => { cup.w = []; saveCup(); setMode('cup'); });
+  $('copy').addEventListener('click', async () => {
+    const text = shareLine(); let ok = false;
+    try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {
+      try { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); ok = document.execCommand('copy'); ta.remove(); } catch (e2) {}
+    }
+    $('copy').textContent = ok ? 'Copied' : 'Copy failed. Select the line below.';
+    setTimeout(() => { $('copy').textContent = 'Copy result'; }, 1800);
+  });
+  phone.addEventListener('change', paintSound);
+
+  // ---- start
+  [...$('tabs').children].forEach(x => x.classList.toggle('on', x.dataset.tab === tab));
+  paintStats(); paintBoard(); paintSound();
+  Promise.all([Reel.load(), refresh()]).then(([items]) => {
+    pool = items; pool.forEach(v => { v.cat = cat(v.title || ''); byId.set(v.id, v); });
+    if (pool.length < 2) { sides[0].querySelector('.title').textContent = 'Not enough clips in the feed.'; return; }
+    setMode(mode);
+  }).catch(() => { sides[0].querySelector('.title').textContent = 'The feed did not load.'; });
+})();
+</script>
+</body>
+</html>

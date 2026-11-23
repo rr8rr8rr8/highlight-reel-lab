@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Highlight Reel</title>
+<style>
+  :root { --bg: #000; --fg: #fff; --muted: rgba(255,255,255,.65); --chip: rgba(255,255,255,.14); --accent: #e5322d;
+    --sheet: #141414; --line: #2a2a2a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+    font: 15px/1.35 -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif; overflow: hidden; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+
+  #feed { height: 100dvh; overflow-y: scroll; scroll-snap-type: y mandatory; scrollbar-width: none; }
+  #feed::-webkit-scrollbar { display: none; }
+  .slide { height: 100dvh; scroll-snap-align: start; scroll-snap-stop: always;
+    display: grid; place-items: center; position: relative; }
+  .stage { position: relative; height: 100dvh; aspect-ratio: 9 / 16; max-width: 100vw; background: #111;
+    background-size: cover; background-position: center; }
+  .stage iframe, .stage .yt { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  /* Catches taps/swipes so the feed scrolls instead of the YouTube player eating them */
+  .shield { position: absolute; inset: 0; z-index: 2; }
+  .info { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; padding: 72px 16px 20px;
+    background: linear-gradient(transparent, rgba(0,0,0,.88)); pointer-events: none; }
+  .info .ch { font-size: 12px; font-weight: 600; color: rgba(255,255,255,.6); }
+  .info .ch span { font-weight: 400; color: rgba(255,255,255,.45); }
+  .info .t { margin-top: 2px; font-size: 13px; color: rgba(255,255,255,.7); display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden; }
+  .info a { display: inline-block; margin-top: 10px; pointer-events: auto; color: rgba(255,255,255,.4); font-size: 11px; text-decoration: none; }
+  .info a:hover { color: var(--muted); }
+  .ctx { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; pointer-events: auto; }
+  .ctx button { display: inline-flex; align-items: center; gap: 8px; border: 0;
+    background: rgba(255,255,255,.94); color: #0b0b0b; box-shadow: 0 4px 18px rgba(0,0,0,.45);
+    border-radius: 999px; padding: 10px 16px; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap;
+    transition: transform .12s ease, background .12s ease; }
+  .ctx button:hover { transform: translateY(-1px); background: #fff; }
+  .ctx button:active { transform: scale(.97); }
+  .ctx .k { color: rgba(0,0,0,.5); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .ctx .result { background: var(--accent); color: #fff; }
+  .ctx .result .k { color: rgba(255,255,255,.75); }
+  .paused::after { content: "❚❚"; position: absolute; inset: 0; z-index: 2; display: grid; place-items: center;
+    font-size: 48px; color: rgba(255,255,255,.8); pointer-events: none; }
+  .dead .t::after { content: " — can’t play here, skipping"; color: var(--accent); }
+
+  #top { position: fixed; top: 0; left: 0; right: 0; z-index: 10; padding: 12px 16px 24px;
+    background: linear-gradient(rgba(0,0,0,.75), transparent); pointer-events: none; }
+  #top > * { pointer-events: auto; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  #top h1 { margin: 0; font-size: 17px; letter-spacing: -0.02em; }
+  #top h1 span { color: var(--accent); }
+  .pill { background: var(--chip); border: 0; border-radius: 999px; padding: 7px 12px; font-size: 13px; white-space: nowrap; }
+  #sound.on, #actionOnly.on { background: var(--fg); color: #000; font-weight: 600; }
+  #regions { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin-top: 10px; max-width: 760px; margin-inline: auto; }
+  #regions::-webkit-scrollbar { display: none; }
+  #regions .pill { padding: 5px 11px; font-size: 12.5px; }
+  #regions .pill.on { background: var(--fg); color: #000; font-weight: 600; }
+
+  .overlay { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.6); display: none; }
+  .overlay.open { display: block; }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: 82dvh; overflow-y: auto;
+    background: var(--sheet); border-radius: 16px 16px 0 0; padding: 18px 16px 28px; max-width: 560px; margin: 0 auto;
+    animation: up .22s ease-out; }
+  @keyframes up { from { transform: translateY(40px); opacity: 0; } }
+  .sheet h2 { margin: 0; font-size: 18px; letter-spacing: -0.01em; }
+  .sheet .sub { color: var(--muted); font-size: 13px; margin: 4px 0 14px; }
+  .sheet .route { font: 12px ui-monospace, Menlo, monospace; color: var(--muted); background: #0b0b0b;
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 14px 0; }
+  .sk { height: 12px; border-radius: 6px; background: #262626; }
+  .skrow { display: grid; grid-template-columns: 22px 1fr 40px 40px; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .skrow.hi { background: rgba(229,50,45,.12); margin: 0 -8px; padding-inline: 8px; border-radius: 6px; }
+  .skrow b { font-size: 13px; }
+  .match { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; text-align: center;
+    padding: 16px 0; font-weight: 700; }
+  .match .sc { font-size: 34px; letter-spacing: 2px; }
+  .avatar { width: 64px; height: 64px; border-radius: 50%; background: #262626; display: grid; place-items: center; font-size: 26px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+  .stats div { background: #1d1d1d; border-radius: 10px; padding: 10px; }
+  .stats div .sk { margin-top: 8px; width: 60%; }
+
+  .grp { margin-bottom: 18px; }
+  .grp h3 { display: flex; justify-content: space-between; align-items: center; font-size: 14px; margin: 0 0 8px; }
+  .grp h3 button { background: none; border: 0; color: var(--muted); font-size: 12px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chan { background: var(--chip); border: 0; border-radius: 999px; padding: 5px 10px; font-size: 12.5px; }
+  .chan.off { background: none; color: rgba(255,255,255,.35); text-decoration: line-through; box-shadow: inset 0 0 0 1px var(--line); }
+  .chan small { color: var(--muted); }
+  #status { position: fixed; inset: 0; display: grid; place-items: center; color: var(--muted); pointer-events: none; text-align: center; }
+</style>
+</head>
+<body>
+<div id="top">
+  <div class="row">
+    <h1>Highlight <span>Reel</span></h1>
+    <div style="display:flex; gap:8px">
+      <button class="pill on" id="actionOnly" title="Only goals, saves, skills and match highlights">⚽ Action only</button>
+      <button class="pill" id="sound">🔇 Sound off</button>
+      <button class="pill" id="edit">Channels</button>
+    </div>
+  </div>
+  <div id="regions"></div>
+</div>
+<div id="status">Loading highlights from around the world…</div>
+<div id="feed"></div>
+
+<div class="overlay" id="stub"><div class="sheet" id="stubSheet"></div></div>
+<div class="overlay" id="chanPanel"><div class="sheet" id="chanSheet"></div></div>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+const OFF_KEY = 'highlight-reel:off';
+const ACTION_KEY = 'highlight-reel:action-only';
+const LIVE_RANGE = 1;   // players kept alive either side of the current slide
+const BATCH = 24;       // slides rendered at a time
+
+const feed = document.getElementById('feed');
+const status = document.getElementById('status');
+let channels = [];
+let off = loadOff();
+let all = [];        // every item from the server
+let items = [];      // items after the region filter
+let rendered = 0;
+let region = 'All';
+let actionOnly = (() => { try { return localStorage.getItem(ACTION_KEY) !== '0'; } catch { return true; } })();
+let current = -1;
+let soundOn = false;
+const players = new Map(); // index -> YT.Player
+const apiReady = new Promise(r => { window.onYouTubeIframeAPIReady = r; });
+
+function loadOff() {
+  try { return new Set(JSON.parse(localStorage.getItem(OFF_KEY)) || []); } catch { return new Set(); }
+}
+function saveOff() {
+  try { localStorage.setItem(OFF_KEY, JSON.stringify([...off])); } catch {}
+}
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function slug(s) { return String(s).normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
+function ago(iso) {
+  const s = (Date.now() - new Date(iso)) / 1000;
+  if (s < 3600) return Math.max(1, Math.round(s / 60)) + 'm';
+  if (s < 86400) return Math.round(s / 3600) + 'h';
+  return Math.round(s / 86400) + 'd';
+}
+function code(name) { return (name || '').replace(/[^A-Za-zÀ-ÿ ]/g, '').trim().slice(0, 3).toUpperCase(); }
+
+// ---- Context chips -------------------------------------------------------
+// Each chip is a link into a part of the site that doesn't exist yet; it opens a stub sheet.
+function chipsFor(ctx) {
+  const out = [];
+  const s = ctx.score;
+  if (s) out.push({ kind: 'result', icon: '🏁', label: s.away ? `${code(s.home)} ${s.h}–${s.a} ${code(s.away)}` : `${s.home} ${s.h}–${s.a}`,
+    k: 'Result', data: s });
+  for (const p of ctx.players.slice(0, 2)) out.push({ kind: 'player', icon: '👤', label: p.name, k: p.club || '', data: p });
+  for (const t of ctx.teams.slice(0, 2)) {
+    const inScore = s && (t.name === s.home || t.name === s.away);
+    out.push({ kind: 'fixture', icon: '📅', label: t.name, k: inScore ? 'Next match' : 'Fixtures', data: t });
+  }
+  if (ctx.league) out.push({ kind: 'table', icon: '📊', label: ctx.league, k: 'Table', data: { league: ctx.league, teams: ctx.teams } });
+  return out.slice(0, 5);
+}
+
+function chipHtml(c, i, j) {
+  return `<button class="${c.kind}" data-i="${i}" data-j="${j}">${c.icon} ${esc(c.label)}${c.k ? ` <span class="k">${esc(c.k)}</span>` : ''}</button>`;
+}
+
+function openStub(c) {
+  const sheet = document.getElementById('stubSheet');
+  const sk = w => `<div class="sk" style="width:${w}%"></div>`;
+  let html = '';
+  if (c.kind === 'table') {
+    const mine = c.data.teams.filter(t => t.league === c.data.league).map(t => t.name);
+    // Positions are unknown, so no numbers: the video's team(s) sit mid-table as a highlight only
+    const rows = Array.from({ length: 8 }, (_, n) => {
+      const name = n >= 3 ? mine[n - 3] : null;
+      return `<div class="skrow${name ? ' hi' : ''}"><span class="k">–</span>${name ? `<b>${esc(name)}</b>` : sk(40 + (n * 13) % 40)}${sk(70)}${sk(60)}</div>`;
+    }).join('');
+    html = `<h2>${esc(c.data.league)} table</h2><p class="sub">Standings, form and goal difference</p>
+      <div class="route">/leagues/${slug(c.data.league)}/table</div>${rows}`;
+  } else if (c.kind === 'result') {
+    const s = c.data;
+    html = `<h2>Match report</h2><p class="sub">Full-time result, scorers and stats</p>
+      <div class="route">/matches/${slug(s.home)}${s.away ? '-vs-' + slug(s.away) : ''}</div>
+      <div class="match"><div>${esc(s.home)}</div><div class="sc">${s.h}–${s.a}</div><div>${esc(s.away || '—')}</div></div>
+      <div class="stats"><div class="k">Possession${sk(60)}</div><div class="k">Shots${sk(50)}</div><div class="k">xG${sk(40)}</div></div>`;
+  } else if (c.kind === 'fixture') {
+    const t = c.data;
+    html = `<h2>${esc(t.name)}</h2><p class="sub">${esc([t.league, t.country].filter(Boolean).join(' · '))}</p>
+      <div class="route">/teams/${slug(t.name)}/fixtures</div>
+      <p class="k" style="margin:0 0 4px">Next match</p>
+      <div class="match"><div>${esc(t.name)}</div><div class="k">vs</div><div>${sk(70)}</div></div>
+      <p class="k" style="margin:8px 0 4px">Recent results</p>
+      ${[0, 1, 2].map(() => `<div class="skrow"><span class="k">•</span>${sk(55)}${sk(60)}${sk(40)}</div>`).join('')}`;
+  } else if (c.kind === 'player') {
+    const p = c.data;
+    html = `<div style="display:flex; gap:14px; align-items:center"><div class="avatar">👤</div>
+      <div><h2>${esc(p.name)}</h2><p class="sub" style="margin:2px 0 0">${esc(p.club || 'Club unknown')}</p></div></div>
+      <div class="route">/players/${slug(p.name)}</div>
+      <div class="stats"><div class="k">Apps${sk(50)}</div><div class="k">Goals${sk(40)}</div><div class="k">Assists${sk(40)}</div></div>`;
+  }
+  sheet.innerHTML = html + `<p class="sub" style="margin-top:16px">Placeholder — this page isn’t built yet.</p>
+    <button class="pill" data-close>Back to the reel</button>`;
+  document.getElementById('stub').classList.add('open');
+  pauseCurrent(true);
+}
+
+// ---- Feed ----------------------------------------------------------------
+async function load() {
+  status.textContent = 'Loading highlights from around the world…';
+  status.style.display = '';
+  const ids = channels.filter(c => !off.has(c.id)).map(c => c.id);
+  const res = await fetch('feed.json');
+  const data = await res.json();
+  all = data.items;
+  renderRegions();
+  applyFilter();
+}
+
+function applyFilter() {
+  destroyAll();
+  feed.innerHTML = '';
+  current = -1;
+  rendered = 0;
+  items = pool().filter(v => region === 'All' || v.group === region);
+  if (!items.length) { status.textContent = 'No Shorts here — try another region or turn channels on.'; status.style.display = ''; return; }
+  status.style.display = 'none';
+  renderMore();
+  feed.scrollTop = 0;
+}
+
+function renderMore() {
+  const end = Math.min(items.length, rendered + BATCH);
+  const html = [];
+  for (let i = rendered; i < end; i++) {
+    const v = items[i];
+    const chips = chipsFor(v.ctx);
+    v._chips = chips;
+    html.push(`
+    <section class="slide" data-i="${i}">
+      <div class="stage" style="background-image:url(https://i.ytimg.com/vi/${v.id}/oar2.jpg), url(https://i.ytimg.com/vi/${v.id}/hqdefault.jpg)">
+        <div class="yt" id="p${i}"></div>
+        <div class="shield"></div>
+        <div class="info">
+          <div class="ch">${esc(v.channel)} <span>· ${esc(v.country)} · ${ago(v.published)}${v.views ? ' · ' + v.views.toLocaleString() + ' views' : ''}</span></div>
+          <div class="t">${esc(v.title)}</div>
+          ${chips.length ? `<div class="ctx">${chips.map((c, j) => chipHtml(c, i, j)).join('')}</div>` : ''}
+          <a href="https://www.youtube.com/shorts/${v.id}" target="_blank" rel="noopener">Open on YouTube ↗</a>
+        </div>
+      </div>
+    </section>`);
+  }
+  feed.insertAdjacentHTML('beforeend', html.join(''));
+  for (let i = rendered; i < end; i++) observer.observe(slide(i));
+  rendered = end;
+}
+
+// Items before the region filter: everything, or only Shorts whose title reads as match action
+function pool() { return actionOnly ? all.filter(v => v.action) : all; }
+
+function renderRegions() {
+  const counts = {};
+  const base = pool();
+  for (const v of base) counts[v.group] = (counts[v.group] || 0) + 1;
+  const groups = ['All', ...new Set(channels.map(c => c.group))].filter(g => g === 'All' || counts[g]);
+  if (!groups.includes(region)) region = 'All';
+  document.getElementById('regions').innerHTML = groups.map(g =>
+    `<button class="pill${g === region ? ' on' : ''}" data-g="${esc(g)}">${esc(g)} <span style="opacity:.55">${g === 'All' ? base.length : counts[g]}</span></button>`).join('');
+}
+
+// Pick whichever slide is mostly on screen
+const observer = new IntersectionObserver(entries => {
+  for (const e of entries) if (e.isIntersecting) setCurrent(+e.target.dataset.i);
+}, { root: feed, threshold: 0.6 });
+
+async function setCurrent(i) {
+  if (i === current) return;
+  current = i;
+  if (i > rendered - 4) renderMore();
+  await apiReady;
+  if (i !== current) return;
+  for (const [j, p] of players) if (Math.abs(j - i) > LIVE_RANGE) {
+    try { p.destroy(); } catch {}
+    players.delete(j);
+    slide(j)?.querySelector('.stage').insertAdjacentHTML('afterbegin', `<div class="yt" id="p${j}"></div>`);
+  }
+  for (let j = i - LIVE_RANGE; j <= i + LIVE_RANGE; j++) if (j >= 0 && j < rendered && !players.has(j)) make(j);
+  for (const [j, p] of players) {
+    if (j === i) playIt(p); else try { p.pauseVideo(); } catch {}
+  }
+  slide(i)?.querySelector('.stage').classList.remove('paused');
+}
+
+function slide(i) { return feed.querySelector(`.slide[data-i="${i}"]`); }
+
+function make(i) {
+  const p = new YT.Player('p' + i, {
+    videoId: items[i].id,
+    host: 'https://www.youtube-nocookie.com',
+    playerVars: { autoplay: 0, controls: 0, mute: 1, playsinline: 1, rel: 0, modestbranding: 1, iv_load_policy: 3 },
+    events: {
+      onReady: () => { if (i === current) playIt(p); },
+      onStateChange: e => { if (e.data === YT.PlayerState.ENDED && i === current) go(1); },
+      onError: () => {
+        // Uploader disabled embedding or video is region-locked: flag it and skip past
+        slide(i)?.querySelector('.stage').classList.add('dead');
+        if (i === current) setTimeout(() => { if (i === current) go(1); }, 1200);
+      },
+    },
+  });
+  players.set(i, p);
+}
+
+function playIt(p) {
+  try {
+    if (soundOn) p.unMute(); else p.mute();
+    p.seekTo(0, true);
+    p.playVideo();
+  } catch {}
+}
+
+function destroyAll() { for (const p of players.values()) try { p.destroy(); } catch {} players.clear(); }
+
+function go(d) {
+  const n = Math.min(items.length - 1, Math.max(0, current + d));
+  if (n >= rendered) renderMore();
+  slide(n)?.scrollIntoView({ behavior: 'smooth' });
+}
+
+function pauseCurrent(force) {
+  const p = players.get(current); if (!p) return;
+  const st = slide(current).querySelector('.stage');
+  if (force || p.getPlayerState() === YT.PlayerState.PLAYING) { p.pauseVideo(); st.classList.add('paused'); }
+  else { p.playVideo(); st.classList.remove('paused'); }
+}
+
+function toggleSound() {
+  soundOn = !soundOn;
+  const b = document.getElementById('sound');
+  b.textContent = soundOn ? '🔊 Sound on' : '🔇 Sound off';
+  b.classList.toggle('on', soundOn);
+  for (const p of players.values()) try { soundOn ? p.unMute() : p.mute(); } catch {}
+}
+
+feed.addEventListener('click', e => {
+  if (e.target.classList.contains('shield')) return pauseCurrent(false);
+  const b = e.target.closest('.ctx button');
+  if (b) openStub(items[+b.dataset.i]._chips[+b.dataset.j]);
+});
+document.getElementById('regions').addEventListener('click', e => {
+  const b = e.target.closest('[data-g]'); if (!b) return;
+  region = b.dataset.g;
+  renderRegions();
+  applyFilter();
+});
+document.getElementById('sound').addEventListener('click', toggleSound);
+const actionBtn = document.getElementById('actionOnly');
+actionBtn.classList.toggle('on', actionOnly);
+actionBtn.addEventListener('click', () => {
+  actionOnly = !actionOnly;
+  actionBtn.classList.toggle('on', actionOnly);
+  try { localStorage.setItem(ACTION_KEY, actionOnly ? '1' : '0'); } catch {}
+  renderRegions();
+  applyFilter();
+});
+document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => {
+  if (e.target === o || e.target.hasAttribute('data-close')) {
+    o.classList.remove('open');
+    if (o.id === 'chanPanel') load();
+    else if (players.get(current)) pauseCurrent(false);
+  }
+}));
+document.addEventListener('keydown', e => {
+  if (document.querySelector('.overlay.open')) {
+    if (e.key === 'Escape') document.querySelector('.overlay.open [data-close]')?.click();
+    return;
+  }
+  if (e.key === 'ArrowDown' || e.key === 'j') { e.preventDefault(); go(1); }
+  else if (e.key === 'ArrowUp' || e.key === 'k') { e.preventDefault(); go(-1); }
+  else if (e.key === ' ') { e.preventDefault(); pauseCurrent(false); }
+  else if (e.key === 'm') toggleSound();
+});
+
+// ---- Channel picker --------------------------------------------------------
+function renderChannels() {
+  const groups = [...new Set(channels.map(c => c.group))];
+  document.getElementById('chanSheet').innerHTML = `
+    <h2>Channels</h2><p class="sub">${channels.length - off.size} of ${channels.length} on · ${new Set(channels.map(c => c.country)).size} countries · latest 15 Shorts each</p>
+    ${groups.map(g => {
+      const cs = channels.filter(c => c.group === g);
+      const allOn = cs.every(c => !off.has(c.id));
+      return `<div class="grp"><h3>${esc(g)} <button data-grp="${esc(g)}">${allOn ? 'Turn all off' : 'Turn all on'}</button></h3>
+        <div class="chips">${cs.map(c => `<button class="chan${off.has(c.id) ? ' off' : ''}" data-id="${c.id}">${esc(c.name)} <small>${g === 'Clubs' || g === 'Global' ? '' : esc(c.country)}</small></button>`).join('')}</div></div>`;
+    }).join('')}
+    <button class="pill" data-close>Done</button>`;
+}
+document.getElementById('edit').addEventListener('click', () => {
+  renderChannels();
+  document.getElementById('chanPanel').classList.add('open');
+  pauseCurrent(true);
+});
+document.getElementById('chanSheet').addEventListener('click', e => {
+  const c = e.target.closest('[data-id]');
+  const g = e.target.closest('[data-grp]');
+  if (c) { off.has(c.dataset.id) ? off.delete(c.dataset.id) : off.add(c.dataset.id); }
+  else if (g) {
+    const cs = channels.filter(x => x.group === g.dataset.grp);
+    const allOn = cs.every(x => !off.has(x.id));
+    cs.forEach(x => allOn ? off.add(x.id) : off.delete(x.id));
+  } else return;
+  saveOff();
+  renderChannels();
+});
+
+fetch('channels.json').then(r => r.json()).then(cs => { channels = cs; load(); });
+</script>
+</body>
+</html>
